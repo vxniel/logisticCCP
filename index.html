@@ -272,6 +272,53 @@ body.locked .results{display:none!important}
 .stock-op-btn{flex:1;background:#161b22;color:#7d8590;border:1px solid #30363d;border-radius:6px;padding:7px 4px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Segoe UI',system-ui,sans-serif;transition:all .15s}
 .stock-op-btn.active{background:#0d2a13;color:#3fb950;border-color:#1d4a22}
 
+
+/* ── Sección Ubicación ── */
+#ubic-scanner-wrap{display:none;margin-top:10px;border-radius:6px;overflow:hidden;border:1px solid #30363d;position:relative;background:#000}
+#ubic-scanner-wrap.visible{display:block}
+#ubic-video{width:100%;display:block;max-height:200px;object-fit:cover}
+#ubic-scan-msg{font-size:12px;color:#7d8590;text-align:center;min-height:18px;margin-top:5px}
+.ubic-prod-card{background:#010409;border:1px solid #21262d;border-radius:7px;padding:9px 11px;display:flex;align-items:flex-start;gap:9px}
+.ubic-prod-badge{min-width:38px;max-width:38px;height:44px;border-radius:6px;background:#0d2136;border:1px solid #1d3d5c;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex-shrink:0}
+.ubic-prod-badge .bt{font-size:8px;font-weight:700;color:#58a6ff}
+.ubic-prod-badge .bs{font-size:8px;color:#79b8ff}
+.ubic-prod-badge.c2{background:#0d2a13;border-color:#1d4a22}.ubic-prod-badge.c2 .bt{color:#3fb950}.ubic-prod-badge.c2 .bs{color:#56d364}
+.ubic-prod-badge.c3{background:#2a1500;border-color:#4a2800}.ubic-prod-badge.c3 .bt{color:#f0883e}
+.ubic-prod-badge.c4{background:#1f0d2e;border-color:#3a1a52}.ubic-prod-badge.c4 .bt{color:#bc8cff}
+.ubic-prod-badge.c5{background:#062929;border-color:#0e4040}.ubic-prod-badge.c5 .bt{color:#39d353}
+.ubic-prod-info{flex:1;min-width:0}
+.ubic-prod-desc{font-size:12.5px;font-weight:600;color:#e6edf3;line-height:1.3;margin-bottom:2px}
+.ubic-prod-cod{font-size:10.5px;color:#7d8590;margin-bottom:4px}
+.ubic-prod-cod span{font-family:monospace;background:#161b22;color:#79b8ff;padding:1px 5px;border-radius:3px;border:1px solid #30363d;font-size:10px}
+.ubic-desglose-row{display:flex;gap:8px;flex-wrap:wrap;font-size:11px}
+.ubic-desglose-item{background:#161b22;border:1px solid #30363d;border-radius:4px;padding:2px 8px;color:#7d8590}
+.ubic-desglose-item b{color:#e6edf3}
+
+
+/* ══ STOCK POR ZONAS ══ */
+.zones-grid{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.zone-card{background:#010409;border:1px solid #21262d;border-radius:8px;padding:10px 12px}
+.zone-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.zone-badge{min-width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;letter-spacing:.03em}
+.zbF {background:#0d2136;color:#58a6ff;border:1px solid #1d3d5c}
+.zbFV{background:#1a1400;color:#d18616;border:1px solid #3d3000}
+.zbPB{background:#1f0d2e;color:#bc8cff;border:1px solid #3a1a52}
+.zbVa{background:#0d2a13;color:#3fb950;border:1px solid #1d4a22}
+.zbVz{background:#2a0a0a;color:#f85149;border:1px solid #4a1a1a}
+.zone-name{font-size:13px;font-weight:600;color:#e6edf3;line-height:1}
+.zone-desc{font-size:10px;color:#484f58;margin-top:2px}
+.zone-current{margin-left:auto;font-size:18px;font-weight:700;color:#e6edf3;min-width:40px;text-align:right}
+.zone-input-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.zone-op{width:36px;height:36px;background:#161b22;border:1px solid #30363d;border-radius:6px;color:#e6edf3;font-size:18px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:300}
+.zone-op:active{background:#21262d}
+.zone-input{flex:1;background:#010409;border:1px solid #30363d;border-radius:6px;padding:8px 10px;font-size:16px;color:#e6edf3;outline:none;text-align:center;font-family:'Segoe UI',system-ui,sans-serif}
+.zone-input:focus{border-color:#58a6ff;box-shadow:0 0 0 3px rgba(88,166,255,.1)}
+.zone-ops-row{display:flex;gap:5px;margin-bottom:4px}
+.zone-mode-btn{flex:1;background:#161b22;color:#484f58;border:1px solid #21262d;border-radius:4px;padding:4px 2px;font-size:10px;font-weight:600;cursor:pointer;font-family:'Segoe UI',system-ui,sans-serif;transition:all .15s}
+.zone-mode-btn.active{background:#0d2136;color:#58a6ff;border-color:#1d3d5c}
+.zone-preview{font-size:11px;color:#3fb950;min-height:14px;text-align:center}
+.zones-total{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;margin-top:8px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:3px}
+
 </style>
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -320,7 +367,8 @@ body.locked .results{display:none!important}
   <p>4,912 productos · 5 calles · Vencimientos · Códigos de barra</p>
   <div id="nav-tabs">
     <button class="nav-tab active" id="tab-buscar" onclick="switchTab('buscar')">🔍 Buscar</button>
-    <button class="nav-tab"        id="tab-modif"  onclick="switchTab('modif')">✏️ Modificaciones</button>
+    <button class="nav-tab"        id="tab-modif"  onclick="switchTab('modif')">✏️ Modificar</button>
+    <button class="nav-tab"        id="tab-ubic"   onclick="switchTab('ubic')">📍 Ubicación</button>
   </div>
 </div>
 
@@ -826,20 +874,130 @@ body.locked .results{display:none!important}
         </div>
         <div id="mod-ubic-preview" style="display:none"></div>
       </div>
-      <!-- Stock -->
+      <!-- Stock por zonas -->
       <div id="step2-stock-panel" style="display:none">
-        <div class="mod-step-label">Paso 2 — Modificar stock</div>
-        <div class="mod-step-desc">Stock actual: <b id="stock-actual-val" style="color:#e6edf3">—</b> unidades</div>
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <button class="stock-op-btn active" id="btn-op-set"    onclick="setStockOp('set')">= Establecer</button>
-          <button class="stock-op-btn"        id="btn-op-add"    onclick="setStockOp('add')">+ Agregar</button>
-          <button class="stock-op-btn"        id="btn-op-remove" onclick="setStockOp('remove')">− Restar</button>
+        <div class="mod-step-label">Paso 2 — Stock por zonas</div>
+        <div id="stock-prod-name" style="font-size:12px;color:#7d8590;margin-bottom:12px"></div>
+
+        <div class="zones-grid">
+          <!-- F -->
+          <div class="zone-card" id="zc-F">
+            <div class="zone-header">
+              <span class="zone-badge zbF">F</span>
+              <div>
+                <div class="zone-name">Flow</div>
+                <div class="zone-desc">Alto flujo · Piso 1</div>
+              </div>
+              <div class="zone-current" id="zv-F">0</div>
+            </div>
+            <div class="zone-input-row">
+              <button class="zone-op" onclick="zoneOp('F','sub')">−</button>
+              <input class="zone-input" id="zi-F" type="number" min="0" placeholder="0" oninput="zonePreview('F')"/>
+              <button class="zone-op" onclick="zoneOp('F','add')">+</button>
+            </div>
+            <div class="zone-ops-row">
+              <button class="zone-mode-btn active" id="zm-F-set" onclick="setZoneMode('F','set')">= Fijar</button>
+              <button class="zone-mode-btn" id="zm-F-add" onclick="setZoneMode('F','add')">+ Agregar</button>
+              <button class="zone-mode-btn" id="zm-F-sub" onclick="setZoneMode('F','sub')">− Restar</button>
+            </div>
+            <div class="zone-preview" id="zp-F"></div>
+          </div>
+          <!-- FV -->
+          <div class="zone-card" id="zc-FV">
+            <div class="zone-header">
+              <span class="zone-badge zbFV">FV</span>
+              <div>
+                <div class="zone-name">Flow Volumen</div>
+                <div class="zone-desc">Medio flujo</div>
+              </div>
+              <div class="zone-current" id="zv-FV">0</div>
+            </div>
+            <div class="zone-input-row">
+              <button class="zone-op" onclick="zoneOp('FV','sub')">−</button>
+              <input class="zone-input" id="zi-FV" type="number" min="0" placeholder="0" oninput="zonePreview('FV')"/>
+              <button class="zone-op" onclick="zoneOp('FV','add')">+</button>
+            </div>
+            <div class="zone-ops-row">
+              <button class="zone-mode-btn active" id="zm-FV-set" onclick="setZoneMode('FV','set')">= Fijar</button>
+              <button class="zone-mode-btn" id="zm-FV-add" onclick="setZoneMode('FV','add')">+ Agregar</button>
+              <button class="zone-mode-btn" id="zm-FV-sub" onclick="setZoneMode('FV','sub')">− Restar</button>
+            </div>
+            <div class="zone-preview" id="zp-FV"></div>
+          </div>
+          <!-- PB -->
+          <div class="zone-card" id="zc-PB">
+            <div class="zone-header">
+              <span class="zone-badge zbPB">PB</span>
+              <div>
+                <div class="zone-name">Picking Baja</div>
+                <div class="zone-desc">Bajo flujo</div>
+              </div>
+              <div class="zone-current" id="zv-PB">0</div>
+            </div>
+            <div class="zone-input-row">
+              <button class="zone-op" onclick="zoneOp('PB','sub')">−</button>
+              <input class="zone-input" id="zi-PB" type="number" min="0" placeholder="0" oninput="zonePreview('PB')"/>
+              <button class="zone-op" onclick="zoneOp('PB','add')">+</button>
+            </div>
+            <div class="zone-ops-row">
+              <button class="zone-mode-btn active" id="zm-PB-set" onclick="setZoneMode('PB','set')">= Fijar</button>
+              <button class="zone-mode-btn" id="zm-PB-add" onclick="setZoneMode('PB','add')">+ Agregar</button>
+              <button class="zone-mode-btn" id="zm-PB-sub" onclick="setZoneMode('PB','sub')">− Restar</button>
+            </div>
+            <div class="zone-preview" id="zp-PB"></div>
+          </div>
+          <!-- Va -->
+          <div class="zone-card" id="zc-Va">
+            <div class="zone-header">
+              <span class="zone-badge zbVa">Va</span>
+              <div>
+                <div class="zone-name">Volumen</div>
+                <div class="zone-desc">Grandes cantidades</div>
+              </div>
+              <div class="zone-current" id="zv-Va">0</div>
+            </div>
+            <div class="zone-input-row">
+              <button class="zone-op" onclick="zoneOp('Va','sub')">−</button>
+              <input class="zone-input" id="zi-Va" type="number" min="0" placeholder="0" oninput="zonePreview('Va')"/>
+              <button class="zone-op" onclick="zoneOp('Va','add')">+</button>
+            </div>
+            <div class="zone-ops-row">
+              <button class="zone-mode-btn active" id="zm-Va-set" onclick="setZoneMode('Va','set')">= Fijar</button>
+              <button class="zone-mode-btn" id="zm-Va-add" onclick="setZoneMode('Va','add')">+ Agregar</button>
+              <button class="zone-mode-btn" id="zm-Va-sub" onclick="setZoneMode('Va','sub')">− Restar</button>
+            </div>
+            <div class="zone-preview" id="zp-Va"></div>
+          </div>
+          <!-- Vz -->
+          <div class="zone-card" id="zc-Vz">
+            <div class="zone-header">
+              <span class="zone-badge zbVz">Vz</span>
+              <div>
+                <div class="zone-name">Altura</div>
+                <div class="zone-desc">Almacenamiento alto</div>
+              </div>
+              <div class="zone-current" id="zv-Vz">0</div>
+            </div>
+            <div class="zone-input-row">
+              <button class="zone-op" onclick="zoneOp('Vz','sub')">−</button>
+              <input class="zone-input" id="zi-Vz" type="number" min="0" placeholder="0" oninput="zonePreview('Vz')"/>
+              <button class="zone-op" onclick="zoneOp('Vz','add')">+</button>
+            </div>
+            <div class="zone-ops-row">
+              <button class="zone-mode-btn active" id="zm-Vz-set" onclick="setZoneMode('Vz','set')">= Fijar</button>
+              <button class="zone-mode-btn" id="zm-Vz-add" onclick="setZoneMode('Vz','add')">+ Agregar</button>
+              <button class="zone-mode-btn" id="zm-Vz-sub" onclick="setZoneMode('Vz','sub')">− Restar</button>
+            </div>
+            <div class="zone-preview" id="zp-Vz"></div>
+          </div>
         </div>
-        <div class="sbox" style="margin-top:10px">
-          <span class="sico">📦</span>
-          <input id="mod-stock-val" type="number" min="0" placeholder="Cantidad..." style="flex:1;border:none;outline:none;padding:13px 4px;font-size:16px;background:transparent;color:#e6edf3"/>
+
+        <!-- TOTAL -->
+        <div class="zones-total">
+          <span style="color:#7d8590;font-size:12px">TOTAL STOCK</span>
+          <div id="zones-total-val" style="font-size:22px;font-weight:700;color:#e6edf3">0</div>
+          <div id="zones-total-preview" style="font-size:11px;color:#3fb950;display:none"></div>
         </div>
-        <div id="stock-resultado-preview" style="margin-top:8px;font-size:12px;color:#7d8590;display:none"></div>
       </div>
       <button class="mod-confirm-btn" id="mod-confirm-btn" onclick="modConfirmStep()">Confirmar →</button>
     </div>
@@ -1048,7 +1206,7 @@ render();
 // ===== LOGIN =====
 const USERS = {
   'VXNIEL':     '201496861',
-  'APOYO':      'APOYO',
+  'APOYO':      '2026',
   'IFIERRO':    '2025',
   'JGALVEZ':    '2025',
   'JCHUNG':     'JCHUNG',
@@ -1127,6 +1285,7 @@ let modLoggedUser = '';
 function switchTab(tab) {
   document.getElementById('section-buscar').style.display = tab==='buscar' ? '' : 'none';
   document.getElementById('section-modif').style.display  = tab==='modif'  ? '' : 'none';
+  document.getElementById('section-ubic').style.display   = tab==='ubic'   ? '' : 'none';
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   if(tab==='modif') renderModHistory();
@@ -1189,10 +1348,8 @@ function modGoStep2() {
   } else {
     document.getElementById('step2-ubic-panel').style.display='none';
     document.getElementById('step2-stock-panel').style.display='block';
-    document.getElementById('stock-actual-val').textContent = modCurrentProduct.stock || 0;
-    document.getElementById('mod-stock-val').value='';
-    document.getElementById('stock-resultado-preview').style.display='none';
-    document.getElementById('mod-stock-val').focus();
+    loadStockZones(modCurrentProduct);
+    listenStockZones(modCurrentProduct.cod);
   }
 }
 
@@ -1232,18 +1389,27 @@ function modConfirmStep() {
     <div class="mod-summary-row"><span class="mod-summary-key">Ubicación actual</span><span class="mod-summary-val">${modCurrentProduct.ubic||'—'}</span></div>
     <div class="mod-summary-row"><span class="mod-summary-key">Nueva ubicación</span><span class="mod-summary-arrow">→ ${newUbic}</span></div>`;
   } else {
-    const val = parseInt(document.getElementById('mod-stock-val').value)||0;
-    const oldStock = modCurrentProduct.stock || 0;
-    let newStock;
-    if(stockOp==='set')    newStock = val;
-    if(stockOp==='add')    newStock = oldStock + val;
-    if(stockOp==='remove') newStock = Math.max(0, oldStock - val);
-    const opLabel = stockOp==='set'?'Establecer en':stockOp==='add'?'Agregar':'Restar';
-    sum_html = `<div class="mod-summary-row"><span class="mod-summary-key">Tipo</span><span class="mod-summary-val">📦 Modificación de stock</span></div>
+    // Build zones summary
+    let zonesRows = '';
+    let totalNow = 0, totalNew = 0;
+    ZONAS.forEach(z => {
+      const val = parseInt(document.getElementById('zi-'+z).value)||0;
+      const cur = stockZones[z]||0;
+      const mode = zoneModes[z];
+      let res;
+      if(mode==='set') res = val > 0 ? val : cur;
+      if(mode==='add') res = cur + val;
+      if(mode==='sub') res = Math.max(0, cur - val);
+      totalNow += cur; totalNew += res;
+      if(res !== cur) {
+        zonesRows += `<div class="mod-summary-row"><span class="mod-summary-key">${z}</span><span class="mod-summary-arrow">${cur} → ${res} uds.</span></div>`;
+      }
+    });
+    if(!zonesRows) zonesRows = '<div style="font-size:11px;color:#484f58;text-align:center;padding:4px">Sin cambios en ninguna zona</div>';
+    sum_html = `<div class="mod-summary-row"><span class="mod-summary-key">Tipo</span><span class="mod-summary-val">📦 Stock por zonas</span></div>
     <div class="mod-summary-row"><span class="mod-summary-key">Producto</span><span class="mod-summary-val" style="color:#e6edf3;font-family:inherit;font-size:11px;max-width:55%;text-align:right">${modCurrentProduct.desc}</span></div>
-    <div class="mod-summary-row"><span class="mod-summary-key">Operación</span><span class="mod-summary-val">${opLabel} ${val}</span></div>
-    <div class="mod-summary-row"><span class="mod-summary-key">Stock actual</span><span class="mod-summary-val">${oldStock} uds.</span></div>
-    <div class="mod-summary-row"><span class="mod-summary-key">Stock nuevo</span><span class="mod-summary-arrow">→ ${newStock} uds.</span></div>`;
+    ${zonesRows}
+    <div class="mod-summary-row" style="border-top:1px solid #30363d;margin-top:4px;padding-top:4px"><span class="mod-summary-key" style="font-weight:700">TOTAL</span><span class="mod-summary-arrow" style="font-size:13px">${totalNow} → ${totalNew} uds.</span></div>`;
   }
   document.getElementById('mod-step3').style.display='block';
   document.getElementById('mod-pass').value='';
@@ -1269,36 +1435,118 @@ document.getElementById('mod-pass').addEventListener('keydown', e => { if(e.key=
 
 // ── Mod type (ubic or stock) ──
 let modType = 'ubic';
-let stockOp = 'set';
+const ZONAS = ['F','FV','PB','Va','Vz'];
+let zoneModes = {F:'set',FV:'set',PB:'set',Va:'set',Vz:'set'};
+// stockZones: holds current stock per zone for the selected product
+let stockZones = {F:0,FV:0,PB:0,Va:0,Vz:0};
 
 function setModType(type) {
   modType = type;
   document.getElementById('btn-type-ubic').classList.toggle('active', type==='ubic');
   document.getElementById('btn-type-stock').classList.toggle('active', type==='stock');
-  document.getElementById('mod-step1-label').textContent  = type==='ubic' ? 'Paso 1 — Producto a reubicar' : 'Paso 1 — Producto a actualizar stock';
-  document.getElementById('mod-step1-desc').textContent   = type==='ubic' ? 'Escanea o ingresa el código del producto a reubicar' : 'Escanea o ingresa el código del producto';
+  document.getElementById('mod-step1-label').textContent = type==='ubic'
+    ? 'Paso 1 — Producto a reubicar'
+    : 'Paso 1 — Producto a actualizar stock';
+  document.getElementById('mod-step1-desc').textContent = type==='ubic'
+    ? 'Escanea o ingresa el código del producto a reubicar'
+    : 'Escanea o ingresa el código del producto';
 }
 
-function setStockOp(op) {
-  stockOp = op;
-  ['set','add','remove'].forEach(o => document.getElementById('btn-op-'+o).classList.toggle('active', o===op));
-  updateStockPreview();
+function setZoneMode(zona, mode) {
+  zoneModes[zona] = mode;
+  ['set','add','sub'].forEach(m => {
+    document.getElementById('zm-'+zona+'-'+m).classList.toggle('active', m===mode);
+  });
+  zonePreview(zona);
 }
 
-function updateStockPreview() {
-  const val = parseInt(document.getElementById('mod-stock-val').value)||0;
-  const actual = modCurrentProduct ? modCurrentProduct.stock : 0;
-  const prev = document.getElementById('stock-resultado-preview');
-  let resultado;
-  if(stockOp==='set')    resultado = val;
-  if(stockOp==='add')    resultado = actual + val;
-  if(stockOp==='remove') resultado = Math.max(0, actual - val);
-  prev.textContent = `Resultado: ${actual} → ${resultado} unidades`;
-  prev.style.display = 'block';
-  prev.style.color = resultado < 0 ? '#f85149' : '#3fb950';
+function zoneOp(zona, op) {
+  const inp = document.getElementById('zi-'+zona);
+  let val = parseInt(inp.value)||0;
+  if(op==='add') val++;
+  if(op==='sub') val = Math.max(0, val-1);
+  inp.value = val;
+  zonePreview(zona);
 }
 
-document.getElementById('mod-stock-val') && document.getElementById('mod-stock-val').addEventListener('input', updateStockPreview);
+function zonePreview(zona) {
+  const val     = parseInt(document.getElementById('zi-'+zona).value)||0;
+  const current = stockZones[zona]||0;
+  const mode    = zoneModes[zona];
+  let result;
+  if(mode==='set') result = val;
+  if(mode==='add') result = current + val;
+  if(mode==='sub') result = Math.max(0, current - val);
+  const prev = document.getElementById('zp-'+zona);
+  if(val > 0 || mode!=='set') {
+    prev.textContent = current + ' → ' + result + ' uds.';
+    prev.style.color = result < current ? '#f85149' : '#3fb950';
+  } else {
+    prev.textContent = '';
+  }
+  updateZonesTotalPreview();
+}
+
+function updateZonesTotalPreview() {
+  let totalNow = 0, totalNew = 0;
+  ZONAS.forEach(z => {
+    const val     = parseInt(document.getElementById('zi-'+z).value)||0;
+    const current = stockZones[z]||0;
+    const mode    = zoneModes[z];
+    let result;
+    if(mode==='set') result = val > 0 ? val : current;
+    if(mode==='add') result = current + val;
+    if(mode==='sub') result = Math.max(0, current - val);
+    totalNow += current;
+    totalNew += result;
+  });
+  document.getElementById('zones-total-val').textContent = totalNow;
+  const tp = document.getElementById('zones-total-preview');
+  if(totalNew !== totalNow) {
+    tp.textContent = '→ ' + totalNew + ' uds. total';
+    tp.style.display = 'block';
+  } else {
+    tp.style.display = 'none';
+  }
+}
+
+function loadStockZones(product) {
+  // Load from product.zones or fallback to stock field
+  const z = product.zones || {};
+  ZONAS.forEach(zona => {
+    stockZones[zona] = z[zona] || 0;
+    document.getElementById('zv-'+zona).textContent = stockZones[zona];
+    document.getElementById('zi-'+zona).value = '';
+    document.getElementById('zp-'+zona).textContent = '';
+    zoneModes[zona] = 'set';
+    ['set','add','sub'].forEach(m =>
+      document.getElementById('zm-'+zona+'-'+m).classList.toggle('active', m==='set')
+    );
+  });
+  document.getElementById('stock-prod-name').textContent = product.desc;
+  updateZonesTotalPreview();
+}
+
+// Listen to Firebase for real-time stock updates
+function listenStockZones(cod) {
+  if (!window._fbReady || !firebase.apps.length) return;
+  firebase.database().ref('stock/'+cod).on('value', snap => {
+    const z = snap.val() || {};
+    ZONAS.forEach(zona => {
+      stockZones[zona] = z[zona] || 0;
+      document.getElementById('zv-'+zona).textContent = stockZones[zona];
+      zonePreview(zona);
+    });
+    // Update DATA in memory
+    const total = ZONAS.reduce((s,z2) => s+(z[z2]||0), 0);
+    DATA.forEach(d => { if(d.cod === cod) { d.stock = total; d.zones = z; } });
+    if(typeof render === 'function') render();
+  });
+}
+function stopListenStock(cod) {
+  if (!window._fbReady || !firebase.apps.length) return;
+  try { firebase.database().ref('stock/'+cod).off(); } catch(e){}
+}
 
 function modSave() {
   const pass = document.getElementById('mod-pass').value.trim();
@@ -1307,18 +1555,18 @@ function modSave() {
   if(!matchUser) { err.textContent='⚠️ Contraseña incorrecta'; return; }
   err.textContent='';
 
-  // Safe Firebase caller — works even if Firebase hasn't loaded yet
+  // Safe Firebase caller con reintentos
   const safePush = (cod, desc, de, a, user, tipo) => {
-    if (typeof window.pushCambioFirebase === 'function') {
-      window.pushCambioFirebase(cod, desc, de, a, user, tipo);
-    } else {
-      // Queue and retry after 2s
-      setTimeout(() => {
-        if (typeof window.pushCambioFirebase === 'function') {
-          window.pushCambioFirebase(cod, desc, de, a, user, tipo);
-        }
-      }, 2000);
-    }
+    const attempt = (tries) => {
+      if (typeof window.pushCambioFirebase === 'function' && window._fbReady) {
+        window.pushCambioFirebase(cod, desc, de, a, user, tipo);
+      } else if (tries > 0) {
+        setTimeout(() => attempt(tries - 1), 500);
+      } else {
+        console.error('❌ Firebase no disponible después de varios intentos');
+      }
+    };
+    attempt(10); // hasta 10 reintentos cada 500ms = 5 segundos
   };
 
   if(modType === 'ubic') {
@@ -1335,22 +1583,49 @@ function modSave() {
     localStorage.setItem('dimerc_hist', JSON.stringify(hist));
     document.getElementById('mod-success-msg').textContent = modCurrentProduct.desc + ' → ' + newUbic + ' (por ' + matchUser + ')';
   } else {
-    // ── GUARDAR STOCK ──
-    const val = parseInt(document.getElementById('mod-stock-val').value)||0;
-    const oldStock = modCurrentProduct.stock;
-    let newStock;
-    if(stockOp==='set')    newStock = val;
-    if(stockOp==='add')    newStock = oldStock + val;
-    if(stockOp==='remove') newStock = Math.max(0, oldStock - val);
+    // ── GUARDAR STOCK POR ZONAS ──
+    const newZones = {};
+    let totalNow = 0, totalNew = 0;
+    ZONAS.forEach(z => {
+      const val = parseInt(document.getElementById('zi-'+z).value)||0;
+      const cur = stockZones[z]||0;
+      const mode = zoneModes[z];
+      let res;
+      if(mode==='set') res = val > 0 ? val : cur;
+      if(mode==='add') res = cur + val;
+      if(mode==='sub') res = Math.max(0, cur - val);
+      newZones[z] = res;
+      totalNow += cur; totalNew += res;
+    });
+
+    // Save to Firebase realtime (nodo stock/COD)
+    const saveZones = (zones) => {
+      if(window._fbReady && firebase.apps.length) {
+        firebase.database().ref('stock/'+modCurrentProduct.cod).set(zones)
+          .then(()=>console.log('✅ Stock guardado en Firebase'))
+          .catch(e=>console.error('❌ Error stock Firebase:',e));
+      }
+    };
+    if(window._fbReady) {
+      saveZones(newZones);
+    } else {
+      setTimeout(()=>saveZones(newZones), 1500);
+    }
+
+    // Update DATA in memory
     const idx = DATA.findIndex(d=>d.cod===modCurrentProduct.cod);
-    if(idx>=0) DATA[idx].stock = newStock;
-    modCurrentProduct.stock = newStock;
-    safePush(modCurrentProduct.cod, modCurrentProduct.desc, String(oldStock), String(newStock), matchUser, 'stock');
+    if(idx>=0){ DATA[idx].stock = totalNew; DATA[idx].zones = newZones; }
+    modCurrentProduct.stock = totalNew; modCurrentProduct.zones = newZones;
+
+    // Stop listening to avoid loop
+    stopListenStock(modCurrentProduct.cod);
+
+    // History
     const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
-    hist.unshift({ ts: new Date().toLocaleString('es-CL'), tipo:'📦 Stock', cod: modCurrentProduct.cod, desc: modCurrentProduct.desc, de: oldStock, a: newStock, user: matchUser });
+    hist.unshift({ ts: new Date().toLocaleString('es-CL'), tipo:'📦 Stock', cod: modCurrentProduct.cod, desc: modCurrentProduct.desc, de: totalNow, a: totalNew, user: matchUser });
     if(hist.length>50) hist.pop();
     localStorage.setItem('dimerc_hist', JSON.stringify(hist));
-    document.getElementById('mod-success-msg').textContent = modCurrentProduct.desc + ': ' + oldStock + ' → ' + newStock + ' uds. (por ' + matchUser + ')';
+    document.getElementById('mod-success-msg').textContent = modCurrentProduct.desc + ': ' + totalNow + ' → ' + totalNew + ' uds. total (por ' + matchUser + ')';
   }
 
   render();
@@ -1362,15 +1637,15 @@ function modSave() {
 }
 
 function modReset() {
+  if(modCurrentProduct) stopListenStock(modCurrentProduct.cod);
   ['mod-step1','mod-step2','mod-step3'].forEach(id => document.getElementById(id).style.display = id==='mod-step1'?'':'none');
   document.getElementById('mod-step4').style.display='none';
   modClear();
   document.getElementById('mod-ubic').value='';
   document.getElementById('mod-ubic-preview').style.display='none';
-  document.getElementById('mod-stock-val').value='';
-  document.getElementById('stock-resultado-preview').style.display='none';
   document.getElementById('mod-summary').style.display='none';
   modCurrentProduct=null;
+  ZONAS.forEach(z=>{ document.getElementById('zi-'+z).value=''; document.getElementById('zp-'+z).textContent=''; });
 }
 
 function renderModHistory() {
@@ -1443,69 +1718,303 @@ function startModDecoding() {
 </script>
 
 
+
+<!-- ===== SECCIÓN UBICACIÓN ===== -->
+<div id="section-ubic" style="display:none">
+  <div class="mod-wrap">
+
+    <div class="mod-card">
+      <div class="mod-step-label">📍 Buscar por ubicación</div>
+      <div class="mod-step-desc">Ingresa o escanea el código de ubicación para ver todos los productos asignados</div>
+
+      <div class="sbox" style="margin-top:10px">
+        <span class="sico">📍</span>
+        <input id="ubic-input" type="text" placeholder="F-01-01-01-01-A-01" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"/>
+        <button class="xbtn2" id="ubic-xbtn" onclick="ubicClear()" style="display:none">✕</button>
+      </div>
+
+      <button class="mod-scan-btn" id="ubicScanBtn" onclick="toggleUbicScanner()">📷 Escanear etiqueta de ubicación</button>
+
+      <div id="ubic-scanner-wrap">
+        <video id="ubic-video" autoplay muted playsinline></video>
+        <div class="scan-overlay"><div class="scan-line"></div></div>
+        <button class="scan-close" onclick="stopUbicScanner()">✕</button>
+      </div>
+      <div id="ubic-scan-msg"></div>
+    </div>
+
+    <!-- Resultado -->
+    <div class="mod-card" id="ubic-result-card" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div class="mod-step-label" id="ubic-result-title">Productos en ubicación</div>
+          <div id="ubic-result-code" style="font-family:monospace;font-size:11px;color:#58a6ff;margin-top:2px"></div>
+        </div>
+        <div id="ubic-result-count" style="background:#0d2136;border:1px solid #1d3d5c;border-radius:20px;padding:3px 10px;font-size:12px;color:#58a6ff;font-weight:700"></div>
+      </div>
+      <div id="ubic-result-desglose" style="background:#010409;border:1px solid #21262d;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#7d8590;display:none"></div>
+      <div id="ubic-products-list" style="display:flex;flex-direction:column;gap:7px"></div>
+      <div id="ubic-empty" style="display:none;text-align:center;padding:20px;color:#484f58;font-size:13px">
+        <div style="font-size:32px;margin-bottom:8px">📭</div>
+        No hay productos asignados a esta ubicación
+      </div>
+    </div>
+
+  </div>
+</div><!-- /section-ubic -->
+
 <script>
 // ═══════════════════════════════════════
-// FIREBASE — init después del DOM/DATA
+// FIREBASE — Realtime Database
 // ═══════════════════════════════════════
-(function initFirebase() {
-  if (typeof firebase === 'undefined') {
-    setTimeout(initFirebase, 200); return;
-  }
-  try { if (firebase.apps && firebase.apps.length) return; } catch(e) {}
+window._fbReady = false;
 
-  firebase.initializeApp({
-    apiKey: "AIzaSyCdESA_0cYJ3SJ1nA1dDHFGKsnEch94PiY",
-    authDomain: "app-bodega-dimerc.firebaseapp.com",
-    databaseURL: "https://app-bodega-dimerc-default-rtdb.firebaseio.com",
-    projectId: "app-bodega-dimerc",
-    storageBucket: "app-bodega-dimerc.firebasestorage.app",
-    messagingSenderId: "640263234486",
-    appId: "1:640263234486:web:ee02eb2df01f03113b5717"
-  });
+function _setupFirebase() {
+  try {
+    // Init app (only once)
+    const app = !firebase.apps.length
+      ? firebase.initializeApp({
+          apiKey: "AIzaSyCdESA_0cYJ3SJ1nA1dDHFGKsnEch94PiY",
+          authDomain: "app-bodega-dimerc.firebaseapp.com",
+          databaseURL: "https://app-bodega-dimerc-default-rtdb.firebaseio.com",
+          projectId: "app-bodega-dimerc",
+          storageBucket: "app-bodega-dimerc.firebasestorage.app",
+          messagingSenderId: "640263234486",
+          appId: "1:640263234486:web:ee02eb2df01f03113b5717"
+        })
+      : firebase.app();
 
-  const db      = firebase.database();
-  const cambRef = db.ref('cambios');
+    const db      = firebase.database();
+    const cambRef = db.ref('cambios');
 
-  // ── Indicador conexión ──────────────
-  db.ref('.info/connected').on('value', snap => {
-    const dot = document.getElementById('conn-dot');
-    const txt = document.getElementById('conn-txt');
-    if (!dot) return;
-    const online = !!snap.val();
-    dot.style.background = online ? '#3fb950' : '#f85149';
-    txt.textContent      = online ? 'En línea'  : 'Sin conexión';
-  });
+    // ── Indicador conexión ────────────
+    db.ref('.info/connected').on('value', snap => {
+      const dot = document.getElementById('conn-dot');
+      const txt = document.getElementById('conn-txt');
+      if (!dot) return;
+      const online = !!snap.val();
+      dot.style.background = online ? '#3fb950' : '#f85149';
+      txt.textContent      = online ? 'En línea' : 'Sin conexión';
+    });
 
-  // ── Escuchar cambios en tiempo real ─
-  let loaded = false;
-  cambRef.on('child_added', snap => {
-    if (!loaded) return;
-    const d = snap.val();
-    if (!d) return;
-    if (d.tipo === 'ubic') {
-      DATA.forEach(p => { if (p.cod === d.cod && p.ubic === d.de) p.ubic = d.a; });
-    } else if (d.tipo === 'stock') {
-      DATA.forEach(p => { if (p.cod === d.cod) p.stock = parseInt(d.a); });
+    // ── Escuchar cambios ──────────────
+    let loaded = false;
+    cambRef.on('child_added', snap => {
+      if (!loaded) return;
+      const d = snap.val();
+      if (!d) return;
+      if (d.tipo === 'ubic') {
+        if (typeof DATA !== 'undefined')
+          DATA.forEach(p => { if (p.cod === d.cod && p.ubic === d.de) p.ubic = d.a; });
+      } else if (d.tipo === 'stock') {
+        if (typeof DATA !== 'undefined')
+          DATA.forEach(p => { if (p.cod === d.cod) p.stock = parseInt(d.a)||0; });
+      }
+      if (typeof render === 'function') render();
+      _fbToast((d.tipo==='stock'?'📦':'📍')+' '+d.user+': '+d.desc.substring(0,25)+'...');
+    });
+    cambRef.once('value', () => { loaded = true; });
+
+  // ── Escuchar actualizaciones de stock por zona en tiempo real ──
+  db.ref('stock').on('child_changed', snap => {
+    const cod = snap.key;
+    const zones = snap.val() || {};
+    const total = ['F','FV','PB','Va','Vz'].reduce((s,z)=>s+(zones[z]||0),0);
+    if(typeof DATA !== 'undefined') {
+      DATA.forEach(p => { if(p.cod===cod){ p.stock=total; p.zones=zones; } });
     }
-    if (typeof render === 'function') render();
-    showToastFB((d.tipo==='stock'?'📦':'📍') + ' ' + d.user + ': ' + d.desc.substring(0,25) + '...');
+    if(typeof render === 'function') render();
   });
-  cambRef.once('value', () => { loaded = true; });
 
-  // ── Guardar cambio ──────────────────
-  window.pushCambioFirebase = function(cod, desc, de, a, user, tipo) {
-    cambRef.push({ cod, desc, de, a, user, tipo: tipo||'ubic', ts: new Date().toISOString() });
-  };
+    // ── Guardar cambio ────────────────
+    window.pushCambioFirebase = function(cod, desc, de, a, user, tipo) {
+      cambRef.push({
+        cod, desc, de, a, user,
+        tipo: tipo || 'ubic',
+        ts: new Date().toISOString()
+      }).then(() => {
+        console.log('✅ Firebase: cambio guardado', tipo, cod);
+      }).catch(err => {
+        console.error('❌ Firebase error:', err);
+      });
+    };
 
-  // ── Toast ───────────────────────────
-  window.showToast = window.showToastFB = function(msg) {
-    const t = document.getElementById('fb-toast');
-    if (!t) return;
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 4500);
-  };
-})();
+    window._fbReady = true;
+    console.log('✅ Firebase inicializado correctamente');
+
+  } catch(e) {
+    console.error('❌ Firebase setup error:', e);
+  }
+}
+
+function _fbToast(msg) {
+  const t = document.getElementById('fb-toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4500);
+}
+window.showToast = window.showToastFB = _fbToast;
+
+// Run when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _setupFirebase);
+} else {
+  _setupFirebase();
+}
+
+// ═══════════════════════════════════════
+// SECCIÓN UBICACIÓN
+// ═══════════════════════════════════════
+let ubicStream = null, ubicScanTimer = null, ubicLastCode = '';
+
+const ubicInp = document.getElementById('ubic-input');
+const ubicXbtn = document.getElementById('ubic-xbtn');
+
+ubicInp.addEventListener('input', e => {
+  const v = e.target.value.trim().toUpperCase();
+  ubicInp.value = v;
+  ubicXbtn.style.display = v ? 'block' : 'none';
+  if (v.length >= 5) searchUbicacion(v);
+  else hideUbicResult();
+});
+ubicInp.addEventListener('keydown', e => { if(e.key==='Enter') searchUbicacion(ubicInp.value.trim().toUpperCase()); });
+
+function ubicClear() {
+  ubicInp.value = ''; ubicXbtn.style.display = 'none';
+  hideUbicResult(); stopUbicScanner();
+}
+
+function hideUbicResult() {
+  document.getElementById('ubic-result-card').style.display = 'none';
+}
+
+function searchUbicacion(ubic) {
+  if (!ubic) return;
+  // Find all products at this location (partial or exact match)
+  const found = DATA.filter(d => {
+    const ubicaciones = d.ubic.split(',').map(u => u.trim());
+    return ubicaciones.some(u => u.toUpperCase().includes(ubic) || ubic.includes(u.toUpperCase()));
+  });
+
+  const card = document.getElementById('ubic-result-card');
+  const list = document.getElementById('ubic-products-list');
+  const empty = document.getElementById('ubic-empty');
+  const title = document.getElementById('ubic-result-title');
+  const codeEl = document.getElementById('ubic-result-code');
+  const countEl = document.getElementById('ubic-result-count');
+  const desgl = document.getElementById('ubic-result-desglose');
+
+  card.style.display = 'block';
+  codeEl.textContent = ubic;
+  countEl.textContent = found.length + ' producto' + (found.length!==1?'s':'');
+  title.textContent = found.length ? 'Productos en esta ubicación' : 'Sin productos';
+
+  // Parse location code for desglose: F-01-01-01-01-A-01
+  const parts = ubic.split('-');
+  if (parts.length >= 6) {
+    const calleN = parseInt(parts[1],10)||'?';
+    const lado   = parseInt(parts[2],10)||'?';
+    const fila   = parseInt(parts[3],10)||'?';
+    const altura = parseInt(parts[4],10)||'?';
+    const dep    = parts[5]||'?';
+    desgl.style.display = 'block';
+    desgl.innerHTML = `<div class="ubic-desglose-row">
+      <span class="ubic-desglose-item">🏗️ Calle <b>${calleN}</b></span>
+      <span class="ubic-desglose-item">📐 Lado <b>${lado}</b></span>
+      <span class="ubic-desglose-item">↕️ Fila <b>${fila}</b></span>
+      <span class="ubic-desglose-item">📏 Altura <b>${altura}</b></span>
+      <span class="ubic-desglose-item">🔤 Dpto. <b>${dep}</b></span>
+    </div>`;
+  } else {
+    desgl.style.display = 'none';
+  }
+
+  if (!found.length) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const CCLS = {'1':'','2':'c2','3':'c3','4':'c4','5':'c5'};
+  list.innerHTML = found.map(d => {
+    const cc = CCLS[d.calle]||'';
+    const vt = d.vcto ? (()=>{
+      const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+      const D90 = new Date(TODAY); D90.setDate(D90.getDate()+90);
+      const [dd,mm,yy] = d.vcto.split('/');
+      const dt = new Date(+yy,+mm-1,+dd);
+      if(dt<TODAY) return '<span class="vtag vvenc">⛔ Vencido '+d.vcto+'</span>';
+      if(dt<=D90)  return '<span class="vtag vprox">⚠️ Vence '+d.vcto+'</span>';
+      return '<span class="vtag vok">✅ '+d.vcto+'</span>';
+    })() : (d.tieneVz==='S'?'<span class="vtag vtiene">🔔 Tiene vencimiento</span>':'');
+    return `<div class="ubic-prod-card">
+      <div class="ubic-prod-badge ${cc}">
+        <span class="bt">C.${d.calle}</span>
+        <span class="bs">D.${d.dep}</span>
+      </div>
+      <div class="ubic-prod-info">
+        <div class="ubic-prod-desc">${d.desc}</div>
+        <div class="ubic-prod-cod">Cód: <span>${d.cod}</span>${d.marca?' · <span style="background:#161b22;color:#7d8590;font-family:inherit">'+d.marca+'</span>':''}</div>
+        <div class="tags">${d.stock>0?'<span class="stag">Stock: '+d.stock+'</span>':''}${vt}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Scanner para ubicación ──────────────
+async function toggleUbicScanner() {
+  if (ubicStream) { stopUbicScanner(); return; }
+  try {
+    document.getElementById('ubic-scan-msg').textContent = 'Iniciando cámara...';
+    ubicStream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}
+    });
+    document.getElementById('ubic-video').srcObject = ubicStream;
+    document.getElementById('ubic-scanner-wrap').classList.add('visible');
+    document.getElementById('ubicScanBtn').textContent = '⏹ Detener escáner';
+    document.getElementById('ubicScanBtn').classList.add('active');
+    document.getElementById('ubic-scan-msg').textContent = '📷 Apunta a la etiqueta de ubicación';
+    startUbicDecoding();
+  } catch(e) {
+    document.getElementById('ubic-scan-msg').textContent = '⚠️ No se pudo acceder a la cámara.';
+  }
+}
+
+function stopUbicScanner() {
+  if (ubicStream) { ubicStream.getTracks().forEach(t=>t.stop()); ubicStream=null; }
+  clearInterval(ubicScanTimer);
+  document.getElementById('ubic-scanner-wrap').classList.remove('visible');
+  document.getElementById('ubicScanBtn').textContent = '📷 Escanear etiqueta de ubicación';
+  document.getElementById('ubicScanBtn').classList.remove('active');
+  document.getElementById('ubic-scan-msg').textContent = '';
+}
+
+function startUbicDecoding() {
+  if (!('BarcodeDetector' in window)) { stopUbicScanner(); return; }
+  const det = new BarcodeDetector({formats:['code_128','code_39','qr_code','ean_13','ean_8']});
+  const vid = document.getElementById('ubic-video');
+  ubicScanTimer = setInterval(async () => {
+    if (!ubicStream || vid.readyState < 2) return;
+    try {
+      const codes = await det.detect(vid);
+      if (codes.length > 0) {
+        const code = codes[0].rawValue.toUpperCase();
+        if (code !== ubicLastCode) {
+          ubicLastCode = code;
+          document.getElementById('ubic-scan-msg').textContent = '✅ Leído: ' + code;
+          ubicInp.value = code; ubicXbtn.style.display = 'block';
+          searchUbicacion(code);
+          if (navigator.vibrate) navigator.vibrate(120);
+          stopUbicScanner();
+          setTimeout(() => { ubicLastCode = ''; }, 3000);
+        }
+      }
+    } catch(e){}
+  }, 300);
+}
+
 </script>
 
 </body>
