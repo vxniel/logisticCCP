@@ -1532,7 +1532,8 @@ function loadStockZones(product) {
 // Listen to Firebase for real-time stock updates
 function listenStockZones(cod) {
   if (!_db) { setTimeout(()=>listenStockZones(cod), 500); return; }
-  _db.ref('estado_stock/'+cod).on('value', snap => {
+  // Cargar estado actual de zonas para este producto
+  _db.ref('estado_stock/'+cod).once('value', snap => {
     const d = snap.val();
     const z = (d && d.zones) ? d.zones : {};
     ZONAS.forEach(zona => {
@@ -1540,14 +1541,11 @@ function listenStockZones(cod) {
       document.getElementById('zv-'+zona).textContent = stockZones[zona];
       zonePreview(zona);
     });
-    const total = ZONAS.reduce((s,z2) => s+(z[z2]||0), 0);
-    DATA.forEach(p => { if(p.cod === cod) { p.stock = total; p.zones = z; } });
-    if(typeof render === 'function') render();
   });
+  // Escuchar cambios en tiempo real via ultimo_cambio (ya manejado globalmente)
 }
 function stopListenStock(cod) {
-  if (!_db) return;
-  try { _db.ref('estado_stock/'+cod).off(); } catch(e){}
+  // No es necesario hacer off() porque usamos ultimo_cambio global
 }
 
 function modSave() {
