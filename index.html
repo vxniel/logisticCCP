@@ -1531,23 +1531,23 @@ function loadStockZones(product) {
 
 // Listen to Firebase for real-time stock updates
 function listenStockZones(cod) {
-  if (!window._fbReady || !firebase.apps.length) return;
-  firebase.database().ref('stock/'+cod).on('value', snap => {
-    const z = snap.val() || {};
+  if (!_db) { setTimeout(()=>listenStockZones(cod), 500); return; }
+  _db.ref('estado_stock/'+cod).on('value', snap => {
+    const d = snap.val();
+    const z = (d && d.zones) ? d.zones : {};
     ZONAS.forEach(zona => {
       stockZones[zona] = z[zona] || 0;
       document.getElementById('zv-'+zona).textContent = stockZones[zona];
       zonePreview(zona);
     });
-    // Update DATA in memory
     const total = ZONAS.reduce((s,z2) => s+(z[z2]||0), 0);
-    DATA.forEach(d => { if(d.cod === cod) { d.stock = total; d.zones = z; } });
+    DATA.forEach(p => { if(p.cod === cod) { p.stock = total; p.zones = z; } });
     if(typeof render === 'function') render();
   });
 }
 function stopListenStock(cod) {
-  if (!window._fbReady || !firebase.apps.length) return;
-  try { firebase.database().ref('stock/'+cod).off(); } catch(e){}
+  if (!_db) return;
+  try { _db.ref('estado_stock/'+cod).off(); } catch(e){}
 }
 
 function modSave() {
@@ -1600,19 +1600,15 @@ function modSave() {
       totalNow += cur; totalNew += res;
     });
 
-    // Save to Firebase realtime (nodo stock/COD)
-    const saveZones = (zones) => {
-      if(window._fbReady && firebase.apps.length) {
-        firebase.database().ref('stock/'+modCurrentProduct.cod).set(zones)
-          .then(()=>console.log('✅ Stock guardado en Firebase'))
-          .catch(e=>console.error('❌ Error stock Firebase:',e));
+    // Guardar stock en Firebase con nueva estrategia
+    const doSaveStock = () => {
+      if(window._fbReady && typeof window.pushStockFirebase === 'function') {
+        window.pushStockFirebase(modCurrentProduct.cod, modCurrentProduct.desc, newZones, matchUser);
+      } else {
+        setTimeout(doSaveStock, 500);
       }
     };
-    if(window._fbReady) {
-      saveZones(newZones);
-    } else {
-      setTimeout(()=>saveZones(newZones), 1500);
-    }
+    doSaveStock();
 
     // Update DATA in memory
     const idx = DATA.findIndex(d=>d.cod===modCurrentProduct.cod);
