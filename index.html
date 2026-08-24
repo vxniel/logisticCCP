@@ -1620,25 +1620,49 @@ function modSave() {
 }
 
 function modReset() {
-  if(modCurrentProduct) stopListenStock(modCurrentProduct.cod);
-  ['mod-step1','mod-step2','mod-step3'].forEach(id => document.getElementById(id).style.display = id==='mod-step1'?'':'none');
-  document.getElementById('mod-step4').style.display='none';
-  modClear();
-  document.getElementById('mod-product-preview').innerHTML='';
-  document.getElementById('mod-product-preview').style.display='none';
-  document.getElementById('mod-ubic').value='';
-  document.getElementById('mod-ubic-preview').style.display='none';
-  document.getElementById('mod-summary').style.display='none';
-  document.getElementById('mod-pass').value='';
-  document.getElementById('mod-err').textContent='';
+  try {
+    if(modCurrentProduct) stopListenStock(modCurrentProduct.cod);
+  } catch(e) { console.error('modReset: stopListenStock falló', e); }
+  try {
+    ['mod-step1','mod-step2','mod-step3'].forEach(id => { const el = document.getElementById(id); if(el) el.style.display = id==='mod-step1'?'':'none'; });
+    const s4 = document.getElementById('mod-step4'); if(s4) s4.style.display='none';
+  } catch(e) { console.error('modReset: pasos falló', e); }
+  try { modClear(); } catch(e) { console.error('modReset: modClear falló', e); }
+  try {
+    const pp = document.getElementById('mod-product-preview');
+    if(pp) { pp.innerHTML=''; pp.style.display='none'; }
+    const ub = document.getElementById('mod-ubic');
+    if(ub) ub.value='';
+    const ubp = document.getElementById('mod-ubic-preview');
+    if(ubp) ubp.style.display='none';
+    const sm = document.getElementById('mod-summary');
+    if(sm) sm.style.display='none';
+    const pass = document.getElementById('mod-pass');
+    if(pass) pass.value='';
+    const err = document.getElementById('mod-err');
+    if(err) err.textContent='';
+  } catch(e) { console.error('modReset: limpieza campos falló', e); }
   modCurrentProduct=null;
   modUbicParts = [];
   modUbicEditIdx = -1;
-  document.getElementById('mod-ubic-list').innerHTML='';
-  document.getElementById('mod-ubic-edit').style.display='none';
-  ZONAS.forEach(z=>{ document.getElementById('zi-'+z).value=''; document.getElementById('zp-'+z).textContent=''; });
-  modCodEl.focus();
-  document.getElementById('mod-step1').scrollIntoView({behavior:'smooth', block:'start'});
+  try {
+    const ul = document.getElementById('mod-ubic-list');
+    if(ul) ul.innerHTML='';
+    const ue = document.getElementById('mod-ubic-edit');
+    if(ue) ue.style.display='none';
+  } catch(e) { console.error('modReset: chips falló', e); }
+  try {
+    ZONAS.forEach(z=>{
+      const zi = document.getElementById('zi-'+z);
+      const zp = document.getElementById('zp-'+z);
+      if(zi) zi.value='';
+      if(zp) zp.textContent='';
+    });
+  } catch(e) { console.error('modReset: zonas falló', e); }
+  try {
+    modCodEl.focus();
+    document.getElementById('mod-step1').scrollIntoView({behavior:'smooth', block:'start'});
+  } catch(e) { console.error('modReset: focus/scroll falló', e); }
 }
 
 function renderModHistory() {
@@ -1860,6 +1884,7 @@ function _setupFirebase() {
     // ── Escuchar cambios ──────────────
     const _fbStartTs = Date.now();
     cambRef.on('child_added', snap => {
+      try {
       const d = snap.val();
       if (!d) return;
       const changeTs = d.ts ? new Date(d.ts).getTime() : 0;
@@ -1884,8 +1909,15 @@ function _setupFirebase() {
         if (typeof DATA !== 'undefined')
           DATA.forEach(p => { if (p.cod === d.cod) p.stock = parseInt(d.a)||0; });
       }
-      if (typeof render === 'function') render();
-      _fbToast((d.tipo==='stock'?'📦':'📍')+' '+d.user+': '+d.desc.substring(0,25)+'...');
+      try {
+        if (typeof render === 'function') render();
+        _fbToast((d.tipo==='stock'?'📦':'📍')+' '+d.user+': '+d.desc.substring(0,25)+'...');
+      } catch(e) {
+        console.error('Firebase listener: render/toast falló', e);
+      }
+      } catch(outerErr) {
+        console.error('Firebase listener: error general en child_added', outerErr);
+      }
     });
 
   // ── Escuchar actualizaciones de stock por zona en tiempo real ──
