@@ -1868,9 +1868,15 @@ function _setupFirebase() {
           DATA.forEach(p => {
             if (p.cod === d.cod) {
               const parts = (p.ubic||'').split(',').map(s=>s.trim()).filter(Boolean);
-              const i = parts.indexOf(d.de);
+              const deUp = (d.de||'').toUpperCase();
+              let i = parts.findIndex(u => u.toUpperCase() === deUp);
+              if (i<0 && deUp) {
+                // Fallback: buscar por zona (prefijo antes del primer '-')
+                const zonaDe = deUp.split('-')[0];
+                i = parts.findIndex(u => u.toUpperCase().split('-')[0] === zonaDe);
+              }
               if (i>=0) { parts[i] = d.a; p.ubic = parts.join(','); }
-              else if (!parts.length && d.a) { p.ubic = d.a; } // producto sin ubicación previa
+              else if (d.a) { parts.push(d.a); p.ubic = parts.join(','); } // no se encontró: agrega la nueva
             }
           });
       } else if (d.tipo === 'stock') {
