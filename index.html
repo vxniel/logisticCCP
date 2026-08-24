@@ -1701,6 +1701,9 @@ function exportHistoryExcel() {
   if(!rows.length) { alert('No hay historial para exportar.'); return; }
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [{wch:20},{wch:14},{wch:10},{wch:45},{wch:22},{wch:22},{wch:14}];
+  // Marca de agua al pie de la hoja
+  const lastRow = rows.length + 2; // +1 header, +1 fila en blanco
+  XLSX.utils.sheet_add_aoa(ws, [['By: Vxniel']], { origin: `A${lastRow}` });
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Historial');
   const now = new Date();
@@ -1744,6 +1747,26 @@ function exportHistoryPDF() {
     },
     margin: { left: 30, right: 30 }
   });
+
+  // Marca de agua diagonal en cada página
+  const pageCount = doc.internal.getNumberOfPages();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.saveGraphicsState();
+    if (typeof doc.setGState === 'function' && doc.GState) {
+      doc.setGState(new doc.GState({ opacity: 0.12 }));
+    }
+    doc.setFontSize(60);
+    doc.setTextColor(31, 56, 84);
+    doc.text('By: Vxniel', pageW / 2, pageH / 2, { angle: 35, align: 'center' });
+    doc.restoreGraphicsState();
+    // Pie de página discreto
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text('By: Vxniel', pageW - 30, pageH - 12, { align: 'right' });
+  }
 
   const now = new Date();
   const fecha = String(now.getDate()).padStart(2,'0') + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + now.getFullYear();
