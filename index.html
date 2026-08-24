@@ -1858,11 +1858,12 @@ function _setupFirebase() {
     });
 
     // ── Escuchar cambios ──────────────
-    let loaded = false;
+    const _fbStartTs = Date.now();
     cambRef.on('child_added', snap => {
-      if (!loaded) return;
       const d = snap.val();
       if (!d) return;
+      const changeTs = d.ts ? new Date(d.ts).getTime() : 0;
+      if (changeTs && changeTs < _fbStartTs - 5000) return; // cambio anterior a conectarse (margen 5s)
       if (d.tipo === 'ubic') {
         if (typeof DATA !== 'undefined')
           DATA.forEach(p => {
@@ -1886,7 +1887,6 @@ function _setupFirebase() {
       if (typeof render === 'function') render();
       _fbToast((d.tipo==='stock'?'📦':'📍')+' '+d.user+': '+d.desc.substring(0,25)+'...');
     });
-    cambRef.once('value', () => { loaded = true; });
 
   // ── Escuchar actualizaciones de stock por zona en tiempo real ──
   db.ref('stock').on('child_changed', snap => {
