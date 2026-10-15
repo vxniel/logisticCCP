@@ -327,6 +327,18 @@ mark{background:#3a2a00;color:#f0d070;border-radius:2px;padding:0 1px}
 .ci-pendiente-row{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#010409;border:1px solid #21262d;border-radius:6px;padding:7px 10px;margin-top:6px;cursor:pointer;font-size:12px;color:#e6edf3}
 .ci-pendiente-row:active{border-color:#58a6ff}
 .ci-pendiente-row .ub{color:#7d8590;font-size:11px}
+.bc-tipo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.bc-tipo-btn{padding:10px 6px;background:#0d1117;border:1px solid #30363d;border-radius:8px;color:#e6edf3;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.bc-tipo-btn:active{transform:scale(.97)}
+.bc-tipo-btn.active{background:#0d2136;border-color:#3fb950;color:#3fb950}
+.bc-preview-box{background:#fff;border-radius:10px;padding:18px 14px;margin-top:12px;display:none;flex-direction:column;align-items:center;gap:4px}
+.bc-preview-label{font-size:14px;font-weight:700;color:#111;text-align:center;word-break:break-word}
+.bc-preview-svg-wrap{width:100%;display:flex;justify-content:center;overflow-x:auto}
+.bc-preview-svg-wrap svg{max-width:100%}
+@media print {
+  body > *:not(#bc-print-area){display:none!important}
+  #bc-print-area{display:flex!important;position:fixed;inset:0;align-items:center;justify-content:center;background:#fff}
+}
 /* hide app while locked */
 body.locked .watermark,
 body.locked #nav-tabs,
@@ -338,7 +350,8 @@ body.locked #section-vcto,
 body.locked #section-indic,
 body.locked #section-consolidado,
 body.locked #section-creapallets,
-body.locked #section-conteointerno{display:none!important}
+body.locked #section-conteointerno,
+body.locked #section-barcode{display:none!important}
 
 @keyframes shake{
   0%,100%{transform:translateX(0)}
@@ -521,8 +534,12 @@ body.locked #section-conteointerno{display:none!important}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.0/JsBarcode.all.min.js"></script>
 </head>
 <body>
+
+<!-- Área exclusiva para impresión del código de barra (se llena por JS al imprimir) -->
+<div id="bc-print-area" style="display:none"></div>
 
 <!-- ========== LOGIN OVERLAY ========== -->
 <div id="login-overlay">
@@ -640,6 +657,7 @@ body.locked #section-conteointerno{display:none!important}
         <button class="nav-dropdown-item" id="tab-consolidado" onclick="switchTab('consolidado')">📦 Consolidado</button>
         <button class="nav-dropdown-item" id="tab-creapallets" onclick="switchTab('creapallets')">🧱 Crea Pallets</button>
         <button class="nav-dropdown-item" id="tab-conteointerno" onclick="switchTab('conteointerno')">🔢 Conteo interno</button>
+        <button class="nav-dropdown-item" id="tab-barcode" onclick="switchTab('barcode')">🏷️ Generar código de barra</button>
       </div>
     </div>
 
@@ -1634,12 +1652,13 @@ function switchTab(tab) {
   document.getElementById('section-consolidado').style.display = tab==='consolidado' ? '' : 'none';
   document.getElementById('section-creapallets').style.display = tab==='creapallets' ? '' : 'none';
   document.getElementById('section-conteointerno').style.display = tab==='conteointerno' ? '' : 'none';
+  document.getElementById('section-barcode').style.display = tab==='barcode' ? '' : 'none';
 
   document.querySelectorAll('.nav-tab, .nav-dropdown-item').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
 
   // Marcar el grupo padre como activo si el tab elegido vive dentro de un dropdown
-  const gestionTabs = ['modif','ubic','consec','consolidado','creapallets','conteointerno'];
+  const gestionTabs = ['modif','ubic','consec','consolidado','creapallets','conteointerno','barcode'];
   const reportesTabs = ['vcto','indic','turno','rotacion','mapa'];
   document.getElementById('tab-group-gestion').classList.toggle('active', gestionTabs.includes(tab));
   document.getElementById('tab-group-reportes').classList.toggle('active', reportesTabs.includes(tab));
@@ -1656,6 +1675,7 @@ function switchTab(tab) {
   if(tab==='consolidado') { initConsolFecha(); renderConsolidado(); document.getElementById('consol-input').focus(); }
   if(tab==='creapallets') { initCPFecha(); renderCP(); document.getElementById('cp-nota').focus(); }
   if(tab==='conteointerno') { initCIFecha(); renderCI(); }
+  if(tab==='barcode') { bcReset(); }
 }
 
 function toggleNavDropdown(name) {
@@ -2956,6 +2976,46 @@ function nuevoProductoSave() {
 
   </div>
 </div><!-- /section-conteointerno -->
+
+<div id="section-barcode" style="display:none">
+  <div class="mod-wrap">
+
+    <div class="mod-card">
+      <div class="mod-step-label">🏷️ Generar código de barra</div>
+      <div class="mod-step-desc">Genera e imprime una etiqueta de código de barra: ingresa el valor, un texto opcional y el estándar.</div>
+    </div>
+
+    <div class="mod-card">
+      <div class="mod-step-desc" style="margin-bottom:6px">🔎 Buscar producto (opcional)</div>
+      <div class="sbox"><span class="sico">🔢</span><input id="bc-buscar" type="text" placeholder="Código o código de barra del producto..." autocomplete="off" oninput="bcBuscarProducto(this.value)"/></div>
+      <div id="bc-buscar-preview" style="display:none;font-size:12px;color:#7d8590;margin-top:6px"></div>
+    </div>
+
+    <div class="mod-card">
+      <div class="mod-step-desc" style="margin-bottom:6px">Valor del código</div>
+      <div class="sbox"><span class="sico">🟦</span><input id="bc-valor" type="text" placeholder="Ej: 7801234567890" autocomplete="off" oninput="bcLimpiarError()"/></div>
+      <div class="mod-step-desc" style="margin:10px 0 6px">📝 Texto de etiqueta (opcional)</div>
+      <div class="sbox"><span class="sico">🏷️</span><input id="bc-etiqueta" type="text" placeholder="Ej: nombre del producto" autocomplete="off"/></div>
+      <div class="mod-step-desc" style="margin:10px 0 6px">📐 Estándar</div>
+      <div class="bc-tipo-grid" id="bc-tipo-grid"></div>
+      <div id="bc-err" style="font-size:12px;color:#f85149;margin-top:8px;display:none"></div>
+      <button class="mod-confirm-btn" onclick="bcGenerar()">✔ Generar código de barra</button>
+    </div>
+
+    <div class="mod-card" id="bc-preview-card" style="display:none">
+      <div class="mod-step-desc" style="margin-bottom:6px">Vista previa</div>
+      <div class="bc-preview-box" id="bc-preview-box">
+        <div class="bc-preview-label" id="bc-preview-label"></div>
+        <div class="bc-preview-svg-wrap"><svg id="bc-svg"></svg></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button class="mod-back-btn" onclick="bcDescargarPNG()">📥 Descargar PNG</button>
+        <button class="mod-back-btn" onclick="bcImprimir()">🖨️ Imprimir</button>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /section-barcode -->
 
 <script>
 // ===== LISTAR CONSECUTIVO =====
@@ -6205,6 +6265,146 @@ function exportCIPDF() {
   doc.setFontSize(9);
   doc.text('By: Vxniel', 40, doc.internal.pageSize.getHeight() - 20);
   doc.save(`ConteoInterno(${fecha}).pdf`);
+}
+
+// ===== Generar código de barra =====
+const BC_TIPOS = [
+  { key: 'CODE128', label: 'CODE128' },
+  { key: 'EAN13',   label: 'EAN-13' },
+  { key: 'EAN8',    label: 'EAN-8' },
+  { key: 'UPC',     label: 'UPC-A' },
+  { key: 'CODE39',  label: 'CODE39' },
+  { key: 'ITF14',   label: 'ITF-14' }
+];
+let bcTipoActivo = 'CODE128';
+
+function bcRenderTipoGrid() {
+  const cont = document.getElementById('bc-tipo-grid');
+  if (!cont) return;
+  cont.innerHTML = BC_TIPOS.map(t =>
+    `<button type="button" class="bc-tipo-btn ${bcTipoActivo===t.key?'active':''}" onclick="bcSeleccionarTipo('${t.key}')">${t.label}</button>`
+  ).join('');
+}
+function bcSeleccionarTipo(key) {
+  bcTipoActivo = key;
+  bcRenderTipoGrid();
+  bcLimpiarError();
+}
+function bcLimpiarError() {
+  const err = document.getElementById('bc-err');
+  if (err) err.style.display = 'none';
+}
+function bcReset() {
+  bcRenderTipoGrid();
+}
+// Buscador por código / código de barra, igual al buscador normal — autocompleta valor y etiqueta
+function bcBuscarProducto(v) {
+  const preview = document.getElementById('bc-buscar-preview');
+  v = (v||'').trim();
+  if (!v) { preview.style.display='none'; return; }
+  const qq = v.toLowerCase();
+  let found = null;
+  if (qq.length>=7 && /^\d+$/.test(qq)) {
+    const hits = Object.keys(BIDX).filter(b=>b.includes(qq));
+    if (hits.length) found = DATA[BIDX[hits[0]][0]];
+  }
+  if (!found) found = DATA.find(d=>d.cod.toLowerCase()===qq);
+  if (!found) found = DATA.find(d=>d.cod.toLowerCase().includes(qq)||d.desc.toLowerCase().includes(qq));
+  if (!found) {
+    preview.style.display = 'block';
+    preview.style.color = '#f85149';
+    preview.textContent = '⚠️ Producto no encontrado.';
+    return;
+  }
+  document.getElementById('bc-valor').value = (found.barras && found.barras.length) ? found.barras[0] : found.cod;
+  document.getElementById('bc-etiqueta').value = found.desc;
+  preview.style.display = 'block';
+  preview.style.color = '#3fb950';
+  preview.textContent = `✔ ${found.desc} (Código ${found.cod})`;
+  bcLimpiarError();
+}
+function bcGenerar() {
+  const errBox = document.getElementById('bc-err');
+  errBox.style.display = 'none';
+  const valor = (document.getElementById('bc-valor').value||'').trim();
+  if (!valor) {
+    errBox.textContent = 'Indica el valor del código.';
+    errBox.style.display = 'block';
+    document.getElementById('bc-valor').focus();
+    return;
+  }
+  const etiqueta = (document.getElementById('bc-etiqueta').value||'').trim();
+  const svg = document.getElementById('bc-svg');
+  let ok = true;
+  try {
+    JsBarcode(svg, valor, {
+      format: bcTipoActivo,
+      lineColor: '#000',
+      width: 2,
+      height: 80,
+      displayValue: true,
+      fontSize: 16,
+      margin: 10,
+      valid: function(v) { ok = v; }
+    });
+  } catch(e) {
+    ok = false;
+  }
+  if (!ok) {
+    errBox.textContent = `⚠️ El valor "${valor}" no es válido para el estándar ${bcTipoActivo}. Revisa el largo/formato o elige otro estándar.`;
+    errBox.style.display = 'block';
+    document.getElementById('bc-preview-card').style.display = 'none';
+    return;
+  }
+  const lbl = document.getElementById('bc-preview-label');
+  lbl.textContent = etiqueta;
+  lbl.style.display = etiqueta ? 'block' : 'none';
+  document.getElementById('bc-preview-card').style.display = 'block';
+  document.getElementById('bc-preview-box').style.display = 'flex';
+}
+// Convierte el SVG actual a PNG (con la etiqueta de texto dibujada encima) y lo descarga
+function bcDescargarPNG() {
+  const svg = document.getElementById('bc-svg');
+  if (!svg || !svg.innerHTML.trim()) { alert('Primero genera un código de barra.'); return; }
+  const etiqueta = document.getElementById('bc-preview-label').textContent || '';
+  const svgData = new XMLSerializer().serializeToString(svg);
+  const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(svgBlob);
+  const img = new Image();
+  img.onload = function() {
+    const padding = 20;
+    const labelH = etiqueta ? 28 : 0;
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width + padding*2;
+    canvas.height = img.height + padding*2 + labelH;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (etiqueta) {
+      ctx.fillStyle = '#111';
+      ctx.font = 'bold 18px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(etiqueta, canvas.width/2, padding + 18);
+    }
+    ctx.drawImage(img, padding, padding + labelH);
+    URL.revokeObjectURL(url);
+    canvas.toBlob(function(blob) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `codigo_barra_${(document.getElementById('bc-valor').value||'etiqueta').trim()}.png`;
+      a.click();
+    });
+  };
+  img.src = url;
+}
+// Imprime solo la etiqueta (usa #bc-print-area, visible exclusivamente durante la impresión)
+function bcImprimir() {
+  const box = document.getElementById('bc-preview-box');
+  if (!box || box.style.display === 'none') { alert('Primero genera un código de barra.'); return; }
+  const printArea = document.getElementById('bc-print-area');
+  printArea.innerHTML = box.outerHTML;
+  window.print();
+  setTimeout(() => { printArea.innerHTML = ''; }, 300);
 }
 
 </script>
