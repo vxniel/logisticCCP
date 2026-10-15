@@ -2882,7 +2882,7 @@ function nuevoProductoSave() {
 
     <div class="mod-card">
       <div class="mod-step-label">🧱 Crea Pallets</div>
-      <div class="mod-step-desc">Registra cada pallet que armas: nota, producto, cantidad de cajas y jaula. La app lleva la cuenta de pallets por nota y producto.</div>
+      <div class="mod-step-desc">Registra cada pallet que armas: nota, producto, cantidad de cajas y jaula. Al escanear el producto se muestran las unidades por pallet en Vz y las cajas por pallet según el sub embalaje. La app lleva la cuenta de pallets por nota y producto.</div>
     </div>
 
     <div class="mod-card">
@@ -5626,12 +5626,33 @@ function cpActualizarPreview() {
     <div class="cp-preview-grid">
       <div class="cp-preview-dato"><div class="k">Producto</div><div class="v" style="font-size:13px;color:#e6edf3">${d.cod}</div></div>
       <div class="cp-preview-dato"><div class="k">Embalaje</div><div class="v">${d.emb!=null ? d.emb+' un/caja' : '—'}</div></div>
-      <div class="cp-preview-dato"><div class="k">Sub e.</div><div class="v">${d.sub!=null ? d.sub : '—'}</div></div>
-      <div class="cp-preview-dato"><div class="k">Cajas (x pallet)</div><div class="v" style="${excede?'color:#f85149':''}">${cajas}</div></div>
+      <div class="cp-preview-dato"><div class="k">Cajas x pallet (sub emb.)</div><div class="v" style="color:#3fb950">${d.sub!=null ? d.sub+(d.emb!=null?' caja'+(d.sub===1?'':'s')+' · '+(d.emb*d.sub).toLocaleString('es-CL')+' un./pallet':''): '—'}</div></div>
+      <div class="cp-preview-dato"><div class="k">Cajas ingresadas (este pallet)</div><div class="v" style="${excede?'color:#f85149':''}">${cajas}${d.sub!=null && !cajasInput ? ` <button type="button" onclick="cpUsarSugerido(${d.sub})" style="background:none;border:none;color:#58a6ff;cursor:pointer;font-size:11px;text-decoration:underline;padding:0;margin-left:4px">usar ${d.sub}</button>` : ''}</div></div>
       <div class="cp-preview-dato" style="grid-column:1/3"><div class="k">Stock disponible</div><div class="v" style="${excede?'color:#f85149':''}">${disponibles!=null ? disponibles+' cajas ('+d.stock+' un.)' : d.stock+' un. (sin embalaje definido)'}${yaCreadas?` · ya creadas hoy: ${yaCreadas} cajas`:''}</div></div>
     </div>
-    ${excede ? `<div style="color:#f85149;font-size:11px;margin-top:8px;font-weight:600">⚠️ Te pasas del stock disponible por ${Math.abs(quedarian)} caja${Math.abs(quedarian)===1?'':'s'}.</div>` : ''}`;
+    ${excede ? `<div style="color:#f85149;font-size:11px;margin-top:8px;font-weight:600">⚠️ Te pasas del stock disponible por ${Math.abs(quedarian)} caja${Math.abs(quedarian)===1?'':'s'}.</div>` : ''}
+    ${cpVzPalletsHTML(d)}`;
   preview.style.display = 'block';
+}
+function cpUsarSugerido(n) {
+  document.getElementById('cp-cajas').value = n;
+  cpActualizarPreview();
+}
+// Lista cada pallet ubicado en Vz para el producto, con sus unidades reales (vzDet)
+function cpVzPalletsHTML(d) {
+  if (!d || !d.ubic) return '';
+  const vzUbics = d.ubic.split(',').map(u=>u.trim()).filter(u=>u.toUpperCase().startsWith('VZ'));
+  if (!vzUbics.length) return '';
+  const det = d.vzDet || {};
+  const totalUni = vzUbics.reduce((a,u) => a + (det[u.toUpperCase()]!=null ? det[u.toUpperCase()] : 0), 0);
+  const filas = vzUbics.map(u => {
+    const cant = det[u.toUpperCase()];
+    return `<div class="ubic-loc-chip c5" style="margin-bottom:5px;justify-content:space-between"><span style="display:flex;align-items:center;gap:8px"><span class="bt">VZ</span><span class="ubic-loc-text">${u}</span></span>${cant!=null ? `<span style="font-size:12px;font-weight:700;color:#3fb950">${cant.toLocaleString('es-CL')} uni.</span>` : '<span style="font-size:11px;color:#7d8590">— sin dato</span>'}</div>`;
+  }).join('');
+  return `<div style="margin-top:10px">
+    <div style="font-size:11px;color:#7d8590;font-weight:700;margin-bottom:6px">📦 Pallets en Vz (${vzUbics.length})${totalUni>0?' · '+totalUni.toLocaleString('es-CL')+' uni. en total':''}</div>
+    ${filas}
+  </div>`;
 }
 let cpJaulaFiltroActual = 'todas';
 function cpRenderJaulaFiltro() {
