@@ -231,6 +231,8 @@ mark{background:#3a2a00;color:#f0d070;border-radius:2px;padding:0 1px}
   transition:color .15s,background .15s;
 }
 #recursos-link:hover{color:#58a6ff;background:#161b22}
+#recursos-fallback{margin-top:6px;font-size:10px;color:#484f58;text-align:center}
+#recursos-fallback a{color:#58a6ff;text-decoration:underline}
 #recursos-overlay{
   position:fixed;inset:0;z-index:100000;
   background:rgba(1,4,9,.75);
@@ -567,7 +569,8 @@ body.locked #section-barcode{display:none!important}
       <button id="lbtn" onclick="doLogin()">Ingresar</button>
     </div>
     <hr id="login-divider"><div id="login-footer">by <b>Vxniel</b></div>
-    <button id="recursos-link" onclick="abrirRecursos()" type="button">📦 Recursos</button>
+    <button id="recursos-link" onclick="abrirRecursos()" ontouchend="abrirRecursos()" type="button">📦 Recursos</button>
+    <div id="recursos-fallback">¿No se abre? <a id="recursos-fallback-link" href="#" target="_blank" rel="noopener">Descarga directa aquí</a></div>
   </div>
 </div>
 <!-- ========== END LOGIN ========== -->
@@ -1291,14 +1294,14 @@ function vctoTag(d){
 // ===== RECURSOS (descargas) =====
 // Edita aquí: nombre, descripcion, icono y url de cada app (link directo de descarga: GitHub Releases, Drive con enlace directo, etc.)
 const RECURSOS_APPS = [
-  { nombre: 'Navegador Via', descripcion: 'App de navegación', icono: '📱', url: 'https://drive.google.com/uc?export=download&id=1h0zj_EIJenGDuxZrg5iU-ft_4amehRlP' },
+  { nombre: 'Navegador Via', descripcion: 'App de navegación', icono: '📱', url: 'https://drive.usercontent.google.com/download?id=1h0zj_EIJenGDuxZrg5iU-ft_4amehRlP&export=download&confirm=t' },
   { nombre: 'App 2', descripcion: 'Reemplaza este texto', icono: '📱', url: '#' }
 ];
 function renderRecursos() {
   const cont = document.getElementById('recursos-lista');
   if (!cont) return;
   cont.innerHTML = RECURSOS_APPS.map(a => `
-    <a class="recurso-item" href="${a.url}" download target="_blank" rel="noopener">
+    <a class="recurso-item" href="${a.url}" target="_blank" rel="noopener">
       <span class="recurso-ico">${a.icono}</span>
       <span class="recurso-txt">
         <div class="recurso-nombre">${a.nombre}</div>
@@ -1308,12 +1311,26 @@ function renderRecursos() {
     </a>
   `).join('');
 }
+// Link directo (sin depender del overlay/JS) por si el navegador del dispositivo
+// no dispara correctamente el onclick del botón "Recursos" (visto en equipos Zebra antiguos).
+function initRecursosFallback() {
+  try {
+    const link = document.getElementById('recursos-fallback-link');
+    if (link && RECURSOS_APPS[0]) link.href = RECURSOS_APPS[0].url;
+  } catch(e) {}
+}
 function abrirRecursos() {
-  renderRecursos();
-  document.getElementById('recursos-overlay').classList.add('visible');
+  try {
+    renderRecursos();
+    const ov = document.getElementById('recursos-overlay');
+    ov.classList.add('visible');
+    ov.style.display = 'flex'; // refuerzo directo por si el navegador no aplica bien la clase
+  } catch(e) {}
 }
 function cerrarRecursos() {
-  document.getElementById('recursos-overlay').classList.remove('visible');
+  const ov = document.getElementById('recursos-overlay');
+  ov.classList.remove('visible');
+  ov.style.display = 'none';
 }
 
 // ===== LOGIN =====
@@ -1568,6 +1585,7 @@ function cerrarVzDetalleProducto() {
   document.getElementById('vz-detalle-modal').style.display = 'none';
 }
 
+initRecursosFallback();
 render();
 
 // ===== RELOJ HORA OFICIAL DE CHILE (sincronizado, igual en todos los dispositivos) =====
