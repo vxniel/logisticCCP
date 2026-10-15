@@ -2025,11 +2025,16 @@ function updateZonesTotalPreview() {
 // Migra valores antiguos guardados por tipo de zona genérico (F/FV/PB/Va/Vz) a la
 // ubicación exacta correspondiente, solo cuando el producto tiene UNA sola de ese tipo
 // (si tiene varias Vz, no hay forma de saber cuál tenía cuál valor — queda en 0 para repartir a mano).
+// Para Vz, si todavía no hay ningún valor guardado por ubicación, usa como referencia el
+// último stock real por ubicación Vz que trajo el Excel/PDF (product.vzDet), en vez de partir en 0.
 function migrarValorLegacy(z, loc) {
   if (z[loc] != null) return z[loc];
   const zona = zonePrefixOf(loc);
   const mismaZona = modLocSlots.filter(u => zonePrefixOf(u)===zona);
   if (mismaZona.length===1 && z[zona] != null) return z[zona];
+  if (zona === 'Vz' && modCurrentProduct && modCurrentProduct.vzDet && modCurrentProduct.vzDet[loc] != null) {
+    return modCurrentProduct.vzDet[loc];
+  }
   return 0;
 }
 
