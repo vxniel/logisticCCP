@@ -33,8 +33,12 @@ body{background:var(--bg);font-family:'Segoe UI',system-ui,sans-serif;color:var(
 .nav-dropdown{position:relative;flex:1}
 .nav-tab-dropdown{width:100%;white-space:nowrap}
 .nav-dropdown.open .nav-tab-dropdown{color:#58a6ff}
-.nav-dropdown-menu{display:none;position:absolute;top:100%;left:0;right:0;background:#161b22;border:1px solid #30363d;border-radius:0 0 8px 8px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.5);min-width:180px}
+.nav-dropdown-menu{display:none;position:absolute;top:100%;left:0;right:0;background:#161b22;border:1px solid #30363d;border-radius:0 0 8px 8px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.5);min-width:180px;max-height:min(60vh,380px);overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
 .nav-dropdown.open .nav-dropdown-menu{display:block}
+.nav-dropdown-menu::-webkit-scrollbar{width:8px}
+.nav-dropdown-menu::-webkit-scrollbar-track{background:#0d1117}
+.nav-dropdown-menu::-webkit-scrollbar-thumb{background:#30363d;border-radius:4px}
+.nav-dropdown-menu::-webkit-scrollbar-thumb:hover{background:#484f58}
 .nav-dropdown-item{display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid #21262d;color:#e6edf3;font-size:13px;font-weight:600;padding:12px 14px;cursor:pointer;font-family:'Segoe UI',system-ui,sans-serif}
 .nav-dropdown-item:last-child{border-bottom:none}
 .nav-dropdown-item:hover{background:#1c2128;color:#58a6ff}
