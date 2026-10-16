@@ -357,7 +357,8 @@ body.locked #section-indic,
 body.locked #section-consolidado,
 body.locked #section-creapallets,
 body.locked #section-conteointerno,
-body.locked #section-barcode{display:none!important}
+body.locked #section-barcode,
+body.locked #section-trazabilidad{display:none!important}
 
 @keyframes shake{
   0%,100%{transform:translateX(0)}
@@ -676,6 +677,7 @@ body.locked #section-barcode{display:none!important}
         <button class="nav-dropdown-item" id="tab-turno" onclick="switchTab('turno')">📋 Reporte de Turno</button>
         <button class="nav-dropdown-item" id="tab-rotacion" onclick="switchTab('rotacion')">🔄 Rotación</button>
         <button class="nav-dropdown-item" id="tab-mapa" onclick="switchTab('mapa')">🏗️ Mapa Virtual</button>
+        <button class="nav-dropdown-item" id="tab-trazabilidad" onclick="switchTab('trazabilidad')">🧭 Trazabilidad</button>
       </div>
     </div>
   </div>
@@ -1676,13 +1678,14 @@ function switchTab(tab) {
   document.getElementById('section-creapallets').style.display = tab==='creapallets' ? '' : 'none';
   document.getElementById('section-conteointerno').style.display = tab==='conteointerno' ? '' : 'none';
   document.getElementById('section-barcode').style.display = tab==='barcode' ? '' : 'none';
+  document.getElementById('section-trazabilidad').style.display = tab==='trazabilidad' ? '' : 'none';
 
   document.querySelectorAll('.nav-tab, .nav-dropdown-item').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
 
   // Marcar el grupo padre como activo si el tab elegido vive dentro de un dropdown
   const gestionTabs = ['modif','ubic','consec','consolidado','creapallets','conteointerno','barcode'];
-  const reportesTabs = ['vcto','indic','turno','rotacion','mapa'];
+  const reportesTabs = ['vcto','indic','turno','rotacion','mapa','trazabilidad'];
   document.getElementById('tab-group-gestion').classList.toggle('active', gestionTabs.includes(tab));
   document.getElementById('tab-group-reportes').classList.toggle('active', reportesTabs.includes(tab));
 
@@ -1699,6 +1702,7 @@ function switchTab(tab) {
   if(tab==='creapallets') { initCPFecha(); renderCP(); document.getElementById('cp-nota').focus(); }
   if(tab==='conteointerno') { initCIFecha(); renderCI(); }
   if(tab==='barcode') { bcReset(); }
+  if(tab==='trazabilidad') { trzReset(); }
 }
 
 function toggleNavDropdown(name) {
@@ -3044,6 +3048,39 @@ function nuevoProductoSave() {
 
   </div>
 </div><!-- /section-barcode -->
+
+<!-- ===== SECCIÓN TRAZABILIDAD ===== -->
+<div id="section-trazabilidad" style="display:none">
+  <div class="mod-wrap">
+
+    <div class="mod-card">
+      <div class="mod-step-label">🧭 Trazabilidad</div>
+      <div class="mod-step-desc">Busca un producto para ver todas sus ubicaciones actuales y el historial de cuándo y cómo se modificó (ubicación y stock), con fecha y usuario.</div>
+    </div>
+
+    <div class="mod-card">
+      <div class="mod-step-desc" style="margin-bottom:6px">🔎 Buscar producto</div>
+      <div class="sbox"><span class="sico">🔢</span><input id="trz-buscar" type="text" placeholder="Código o código de barra del producto..." autocomplete="off" oninput="trzBuscarProducto(this.value)"/></div>
+      <div id="trz-err" style="font-size:12px;color:#f85149;margin-top:6px;display:none"></div>
+    </div>
+
+    <div class="mod-card" id="trz-producto-card" style="display:none">
+      <div class="cp-preview-nombre" id="trz-producto-nombre"></div>
+      <div style="font-size:12px;color:#7d8590;margin-top:2px">Código: <b style="color:#e6edf3" id="trz-producto-cod"></b></div>
+      <div id="trz-ubic-actual" style="margin-top:12px"></div>
+    </div>
+
+    <div class="mod-card" id="trz-hist-card" style="display:none">
+      <div class="mod-step-label" style="font-size:14px">📋 Historial de modificaciones</div>
+      <div id="trz-hist-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="mod-back-btn" onclick="exportTrzExcel()">📊 Exportar Excel</button>
+        <button class="mod-back-btn" onclick="exportTrzPDF()">📄 Exportar PDF</button>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /section-trazabilidad -->
 
 <script>
 // ===== LISTAR CONSECUTIVO =====
@@ -6506,6 +6543,130 @@ function bcImprimir() {
   printArea.innerHTML = box.outerHTML;
   window.print();
   setTimeout(() => { printArea.innerHTML = ''; }, 300);
+}
+
+// ===== Trazabilidad (historial de ubicaciones/stock por producto) =====
+let trzProductoActual = null;
+function trzReset() {
+  trzProductoActual = null;
+  document.getElementById('trz-buscar').value = '';
+  document.getElementById('trz-producto-card').style.display = 'none';
+  document.getElementById('trz-hist-card').style.display = 'none';
+  const err = document.getElementById('trz-err');
+  err.style.display = 'none';
+  document.getElementById('trz-buscar').focus();
+}
+function trzBuscarProducto(v) {
+  const err = document.getElementById('trz-err');
+  v = (v||'').trim();
+  err.style.display = 'none';
+  if (!v) {
+    trzProductoActual = null;
+    document.getElementById('trz-producto-card').style.display = 'none';
+    document.getElementById('trz-hist-card').style.display = 'none';
+    return;
+  }
+  const qq = v.toLowerCase();
+  let found = null;
+  if (qq.length>=7 && /^\d+$/.test(qq)) {
+    const hits = Object.keys(BIDX).filter(b=>b.includes(qq));
+    if (hits.length) found = DATA[BIDX[hits[0]][0]];
+  }
+  if (!found) found = DATA.find(d=>d.cod.toLowerCase()===qq);
+  if (!found) found = DATA.find(d=>d.cod.toLowerCase().includes(qq)||d.desc.toLowerCase().includes(qq));
+  if (!found) {
+    trzProductoActual = null;
+    document.getElementById('trz-producto-card').style.display = 'none';
+    document.getElementById('trz-hist-card').style.display = 'none';
+    err.textContent = '⚠️ Producto no encontrado.';
+    err.style.display = 'block';
+    return;
+  }
+  trzProductoActual = found;
+  trzRenderProducto(found);
+  trzRenderHistorial(found.cod);
+}
+function trzRenderProducto(d) {
+  document.getElementById('trz-producto-nombre').textContent = d.desc;
+  document.getElementById('trz-producto-cod').textContent = d.cod;
+  const ubicList = (d.ubic||'').split(',').map(u=>u.trim()).filter(Boolean);
+  const zonaColor = { F:'', FV:'c2', PB:'c3', VA:'c4', VZ:'c5' };
+  const det = d.vzDet || {};
+  const chips = ubicList.map(u => {
+    const zona = u.split('-')[0].toUpperCase();
+    const cc = zonaColor[zona] || '';
+    const cant = zona === 'VZ' ? det[u.toUpperCase()] : null;
+    return `<div class="ubic-loc-chip ${cc}" style="margin-bottom:5px;justify-content:space-between">
+      <span style="display:flex;align-items:center;gap:8px"><span class="bt">${zona}</span><span class="ubic-loc-text">${u}</span></span>
+      ${cant!=null ? `<span style="font-size:12px;font-weight:700;color:#3fb950">${cant.toLocaleString('es-CL')} uni.</span>` : ''}
+    </div>`;
+  }).join('');
+  document.getElementById('trz-ubic-actual').innerHTML = `
+    <div style="font-size:11px;color:#7d8590;font-weight:700;margin-bottom:6px">📍 Ubicaciones actuales (${ubicList.length}) · Stock total: ${(d.stock||0).toLocaleString('es-CL')}</div>
+    ${chips || '<div style="font-size:12px;color:#7d8590">Sin ubicaciones registradas.</div>'}
+  `;
+  document.getElementById('trz-producto-card').style.display = 'block';
+}
+function trzGetHistorialProducto(cod) {
+  const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
+  return hist.filter(h => h.cod === cod);
+}
+function trzRenderHistorial(cod) {
+  const card = document.getElementById('trz-hist-card');
+  const list = document.getElementById('trz-hist-list');
+  const rows = trzGetHistorialProducto(cod);
+  if (!rows.length) {
+    card.style.display = 'block';
+    list.innerHTML = '<div style="font-size:12px;color:#7d8590">Sin modificaciones registradas para este producto (en este dispositivo).</div>';
+    return;
+  }
+  card.style.display = 'block';
+  list.innerHTML = rows.map(h => `<div class="hist-item">
+    <div class="hist-item-name">${h.tipo||'✏️'} ${h.desc||''}</div>
+    <div class="hist-item-sub"><span>${h.de||h.oldUbic||'—'}</span> → <span style="color:#3fb950">${h.a||h.newUbic||'—'}</span></div>
+    <div class="hist-item-user">✏️ ${h.user||'—'} · ${h.ts||''}</div>
+  </div>`).join('');
+}
+function trzGetHistoryRows() {
+  if (!trzProductoActual) return [];
+  return trzGetHistorialProducto(trzProductoActual.cod).map(h => ({
+    Fecha: h.ts || '',
+    Tipo: h.tipo || '',
+    Codigo: h.cod || '',
+    Producto: h.desc || '',
+    De: h.de || h.oldUbic || '',
+    A: h.a || h.newUbic || '',
+    Usuario: h.user || ''
+  }));
+}
+function exportTrzExcel() {
+  const rows = trzGetHistoryRows();
+  if (!rows.length) { alert('No hay historial para exportar.'); return; }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:20},{wch:14},{wch:10},{wch:45},{wch:22},{wch:22},{wch:14}];
+  const lastRow = rows.length + 2;
+  XLSX.utils.sheet_add_aoa(ws, [['By: Vxniel']], { origin: `A${lastRow}` });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Trazabilidad');
+  XLSX.writeFile(wb, `Trazabilidad_${trzProductoActual.cod}.xlsx`);
+}
+function exportTrzPDF() {
+  const rows = trzGetHistoryRows();
+  if (!rows.length) { alert('No hay historial para exportar.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  doc.setFontSize(14);
+  doc.text(`Trazabilidad — ${trzProductoActual.cod} · ${trzProductoActual.desc}`, 40, 40);
+  doc.autoTable({
+    startY: 60,
+    head: [['Fecha','Tipo','Código','Producto','De','A','Usuario']],
+    body: rows.map(r => [r.Fecha, r.Tipo, r.Codigo, r.Producto, r.De, r.A, r.Usuario]),
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [35,134,54] }
+  });
+  doc.setFontSize(9);
+  doc.text('By: Vxniel', 40, doc.internal.pageSize.getHeight() - 20);
+  doc.save(`Trazabilidad_${trzProductoActual.cod}.pdf`);
 }
 
 </script>
