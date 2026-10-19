@@ -1445,12 +1445,10 @@ function hl(t,q){
 // [removido: función de escáner sin uso — stopScanner]
 // [removido: función de escáner sin uso — startDecoding]
 
-// Caché de deduplicación: evita reconstruir el índice en cada tecla del buscador.
-// Se invalida solo si DATA cambia de tamaño (ej: se crea un producto nuevo).
-let _dedupedCache = null;
-let _dedupedCacheLen = -1;
 function getDedupedData() {
-  if (_dedupedCache && _dedupedCacheLen === DATA.length) return _dedupedCache;
+  // Nota: se recalcula siempre (no se cachea) porque DATA se modifica en vivo en
+  // muchos lugares (stock, ubicación, vencimiento) sin cambiar su longitud, y una
+  // caché basada solo en DATA.length quedaba desactualizada tras esos cambios.
   const byCod = {};
   DATA.forEach((d,i)=>{
     const existing = byCod[d.cod];
@@ -1458,9 +1456,7 @@ function getDedupedData() {
       byCod[d.cod] = {...d, _i:i};
     }
   });
-  _dedupedCache = Object.values(byCod);
-  _dedupedCacheLen = DATA.length;
-  return _dedupedCache;
+  return Object.values(byCod);
 }
 
 function render(){
