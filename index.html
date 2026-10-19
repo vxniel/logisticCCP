@@ -3153,8 +3153,43 @@ function nuevoProductoSave() {
       <div class="mod-step-desc" id="prod-picking-faltantes" style="display:none;color:#f85149"></div>
       <div id="prod-picking-list" style="margin-top:8px;display:flex;flex-direction:column;gap:12px"></div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="mod-confirm-btn" style="margin-top:0" onclick="prodIniciarPickingRun()">▶ Iniciar picking</button>
         <button class="mod-back-btn" onclick="exportProdExcel()">📊 Exportar Excel</button>
         <button class="mod-back-btn" onclick="exportProdPDF()">📄 Exportar PDF</button>
+      </div>
+    </div>
+
+    <!-- Picking interactivo: ir a la ubicación y confirmar escaneando el producto -->
+    <div class="mod-card" id="prod-run-card" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="mod-step-label" style="font-size:14px">🧭 Picking en curso</div>
+        <div id="prod-run-progress" style="background:#0d2136;border:1px solid #1d3d5c;border-radius:20px;padding:3px 10px;font-size:12px;color:#58a6ff;font-weight:700"></div>
+      </div>
+
+      <div id="prod-run-actual"></div>
+
+      <div id="prod-run-pendiente-wrap">
+        <div class="sbox" style="margin-top:12px">
+          <span class="sico">📷</span>
+          <input id="prod-run-scan" type="text" placeholder="Escanea o ingresa el código para confirmar" autocomplete="off" autocorrect="off" spellcheck="false"/>
+        </div>
+        <div id="prod-run-err" style="font-size:12px;color:#f85149;margin-top:6px;display:none"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="mod-back-btn" onclick="prodSaltarActual()">⏭ Saltar este producto</button>
+          <button class="mod-back-btn" onclick="prodCancelarRun()">✖ Cancelar picking</button>
+        </div>
+      </div>
+
+      <div id="prod-run-completo-wrap" style="display:none;margin-top:12px">
+        <div class="mod-product-preview" style="text-align:center;background:#0d2a13;border-color:#1d4a22">
+          <div style="font-size:15px;font-weight:700;color:#3fb950">✅ Pedido completo</div>
+          <div style="font-size:12px;color:#7d8590;margin-top:4px" id="prod-run-completo-detalle"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="mod-back-btn" onclick="exportProdExcel()">📊 Exportar Excel</button>
+          <button class="mod-back-btn" onclick="exportProdPDF()">📄 Exportar PDF</button>
+          <button class="mod-confirm-btn" style="margin-top:0" onclick="prodFinalizarRun()">🏁 Finalizar y limpiar pedido</button>
+        </div>
       </div>
     </div>
 
@@ -6915,6 +6950,13 @@ function prodReset() {
   document.getElementById('prod-bulk-err').style.display = 'none';
   document.getElementById('prod-picking-card').style.display = 'none';
   prodLastPicking = null;
+  // si hay un picking en curso (ej: se cambió de pestaña y se volvió), lo restauramos
+  if (getProdRun()) {
+    document.getElementById('prod-run-card').style.display = 'block';
+    renderProdPickRun();
+  } else {
+    document.getElementById('prod-run-card').style.display = 'none';
+  }
 }
 
 function prodSearchProduct(v) {
@@ -7124,10 +7166,144 @@ function renderProdPicking(grupos, faltantes) {
   card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function prodGetPickingRows() {
-  if (!prodLastPicking) return [];
-  const rows = [];
+// ── Picking interactivo: ir a la ubicación y confirmar escaneando el producto ──
+function getProdRun() {
+  try { return JSON.parse(localStorage.getItem('dimerc_produccion_run')||'null'); }
+  catch(e) { return null; }
+}
+function setProdRun(run) {
+  localStorage.setItem('dimerc_produccion_run', JSON.stringify(run));
+}
+
+function prodIniciarPickingRun() {
+  if (!prodLastPicking) { alert('Genera el picking primero.'); return; }
+  const items = [];
   prodLastPicking.forEach(g => {
+    g.items.forEach(it => {
+      items.push({ cod: it.cod, desc: it.desc, cantidad: it.cantidad, ubic: it.ubic, calle: g.calle, status: 'pending' });
+    });
+  });
+  setProdRun({ items });
+  document.getElementById('prod-run-card').style.display = 'block';
+  renderProdPickRun();
+  document.getElementById('prod-run-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function prodRunActualItem(run) {
+  return run.items.find(it => it.status === 'pending') || null;
+}
+
+function renderProdPickRun() {
+  const run = getProdRun();
+  if (!run) { document.getElementById('prod-run-card').style.display = 'none'; return; }
+
+  const total = run.items.length;
+  const hechos = run.items.filter(it => it.status === 'done').length;
+  document.getElementById('prod-run-progress').textContent = `${hechos}/${total} completados`;
+
+  const actual = prodRunActualItem(run);
+  const pendienteWrap = document.getElementById('prod-run-pendiente-wrap');
+  const completoWrap = document.getElementById('prod-run-completo-wrap');
+  const actualBox = document.getElementById('prod-run-actual');
+  const errBox = document.getElementById('prod-run-err');
+
+  if (!actual) {
+    actualBox.innerHTML = '';
+    pendienteWrap.style.display = 'none';
+    completoWrap.style.display = 'block';
+    document.getElementById('prod-run-completo-detalle').textContent = `${hechos} de ${total} productos pickeados.`;
+    return;
+  }
+
+  pendienteWrap.style.display = 'block';
+  completoWrap.style.display = 'none';
+  errBox.style.display = 'none';
+
+  actualBox.innerHTML = `
+    <div class="mod-product-preview" style="margin-top:10px">
+      <div style="font-size:11px;color:#7d8590">📍 Ve a:</div>
+      <div style="font-size:20px;font-weight:800;color:#58a6ff;font-family:monospace;margin-top:2px">${actual.ubic}</div>
+      <div style="font-size:13px;color:#e6edf3;font-weight:600;margin-top:8px">${actual.desc}</div>
+      <div style="font-size:11px;color:#7d8590;margin-top:3px">Código: <b style="color:#e6edf3">${actual.cod}</b> · ${CI_CALLES[actual.calle] || ('Calle '+actual.calle)}</div>
+      <div style="font-size:22px;font-weight:800;color:#3fb950;margin-top:8px">Retirar: ${actual.cantidad}</div>
+    </div>`;
+
+  const scan = document.getElementById('prod-run-scan');
+  scan.value = '';
+  scan.focus();
+}
+
+function prodConfirmarPickScan() {
+  const run = getProdRun();
+  if (!run) return;
+  const actual = prodRunActualItem(run);
+  if (!actual) return;
+
+  const scan = document.getElementById('prod-run-scan');
+  const errBox = document.getElementById('prod-run-err');
+  const v = scan.value.trim();
+  if (!v) return;
+
+  const found = prodFindProduct(v);
+  if (!found || found.cod !== actual.cod) {
+    errBox.textContent = `⚠️ Ese código no corresponde al producto esperado (${actual.cod} · ${actual.desc}).`;
+    errBox.style.display = 'block';
+    scan.value = '';
+    scan.focus();
+    return;
+  }
+
+  actual.status = 'done';
+  setProdRun(run);
+  renderProdPickRun();
+}
+
+function prodSaltarActual() {
+  const run = getProdRun();
+  if (!run) return;
+  const idx = run.items.findIndex(it => it.status === 'pending');
+  if (idx === -1) return;
+  const pendientes = run.items.filter(it => it.status === 'pending');
+  if (pendientes.length <= 1) { alert('Es el único producto pendiente, no se puede saltar.'); return; }
+  const [item] = run.items.splice(idx, 1);
+  run.items.push(item);
+  setProdRun(run);
+  renderProdPickRun();
+}
+
+function prodCancelarRun() {
+  if (!confirm('¿Cancelar el picking en curso? El pedido y el picking generado se mantienen, solo se pierde el avance de esta ronda.')) return;
+  localStorage.removeItem('dimerc_produccion_run');
+  document.getElementById('prod-run-card').style.display = 'none';
+}
+
+function prodFinalizarRun() {
+  if (!confirm('¿Finalizar y limpiar el pedido completo?')) return;
+  localStorage.removeItem('dimerc_produccion_run');
+  localStorage.removeItem('dimerc_produccion');
+  document.getElementById('prod-run-card').style.display = 'none';
+  document.getElementById('prod-picking-card').style.display = 'none';
+  prodLastPicking = null;
+  renderProdList();
+}
+
+document.getElementById('prod-run-scan').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); prodConfirmarPickScan(); }
+});
+
+function prodGetPickingRows() {
+  let fuente = prodLastPicking;
+  if (!fuente) {
+    const run = getProdRun();
+    if (run) {
+      const porCalle = {};
+      run.items.forEach(it => { (porCalle[it.calle] = porCalle[it.calle] || []).push(it); });
+      fuente = Object.keys(porCalle).sort((a,b) => (parseInt(b)||0)-(parseInt(a)||0)).map(c => ({ calle: c, items: porCalle[c] }));
+    }
+  }
+  if (!fuente) return [];
+  const rows = [];
+  fuente.forEach(g => {
     g.items.forEach(it => {
       rows.push({
         Calle: CI_CALLES[g.calle] || ('Calle ' + g.calle),
