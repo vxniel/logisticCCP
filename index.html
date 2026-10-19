@@ -358,7 +358,8 @@ body.locked #section-consolidado,
 body.locked #section-creapallets,
 body.locked #section-conteointerno,
 body.locked #section-barcode,
-body.locked #section-trazabilidad{display:none!important}
+body.locked #section-trazabilidad,
+body.locked #section-produccion{display:none!important}
 
 @keyframes shake{
   0%,100%{transform:translateX(0)}
@@ -666,6 +667,7 @@ body.locked #section-trazabilidad{display:none!important}
         <button class="nav-dropdown-item" id="tab-creapallets" onclick="switchTab('creapallets')">🧱 Crea Pallets</button>
         <button class="nav-dropdown-item" id="tab-conteointerno" onclick="switchTab('conteointerno')">🔢 Conteo interno</button>
         <button class="nav-dropdown-item" id="tab-barcode" onclick="switchTab('barcode')">🏷️ Generar código de barra</button>
+        <button class="nav-dropdown-item" id="tab-produccion" onclick="switchTab('produccion')">🏭 Producción</button>
       </div>
     </div>
 
@@ -1675,12 +1677,13 @@ function switchTab(tab) {
   document.getElementById('section-conteointerno').style.display = tab==='conteointerno' ? '' : 'none';
   document.getElementById('section-barcode').style.display = tab==='barcode' ? '' : 'none';
   document.getElementById('section-trazabilidad').style.display = tab==='trazabilidad' ? '' : 'none';
+  document.getElementById('section-produccion').style.display = tab==='produccion' ? '' : 'none';
 
   document.querySelectorAll('.nav-tab, .nav-dropdown-item').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
 
   // Marcar el grupo padre como activo si el tab elegido vive dentro de un dropdown
-  const gestionTabs = ['modif','ubic','consec','consolidado','creapallets','conteointerno','barcode'];
+  const gestionTabs = ['modif','ubic','consec','consolidado','creapallets','conteointerno','barcode','produccion'];
   const reportesTabs = ['vcto','indic','turno','rotacion','mapa','trazabilidad'];
   document.getElementById('tab-group-gestion').classList.toggle('active', gestionTabs.includes(tab));
   document.getElementById('tab-group-reportes').classList.toggle('active', reportesTabs.includes(tab));
@@ -1699,6 +1702,7 @@ function switchTab(tab) {
   if(tab==='conteointerno') { initCIFecha(); renderCI(); }
   if(tab==='barcode') { bcReset(); }
   if(tab==='trazabilidad') { trzReset(); }
+  if(tab==='produccion') { prodReset(); renderProdList(); }
 }
 
 function toggleNavDropdown(name) {
@@ -3082,6 +3086,80 @@ function nuevoProductoSave() {
 
   </div>
 </div><!-- /section-trazabilidad -->
+
+<!-- ===== SECCIÓN PRODUCCIÓN ===== -->
+<div id="section-produccion" style="display:none">
+  <div class="mod-wrap">
+
+    <div class="mod-card">
+      <div class="mod-step-label">🏭 Producción — Pedido por códigos</div>
+      <div class="mod-step-desc">Ingresa los códigos del pedido del cliente. Se calcula el total por producto y se genera el picking ordenado por calle (de la 5 a la 1) y, dentro de cada calle, de la ubicación mayor a la menor.</div>
+    </div>
+
+    <div class="mod-card">
+      <div class="mod-step-label" style="font-size:14px">🔎 Agregar producto</div>
+      <div class="mod-step-desc">Escanea o ingresa el código del producto</div>
+
+      <div class="sbox" style="margin-top:10px">
+        <span class="sico">🔎</span>
+        <input id="prod-cod" type="text" placeholder="Código o código de barra" autocomplete="off" autocorrect="off" spellcheck="false"/>
+        <button class="xbtn2" id="prod-xbtn" onclick="prodClear()" style="display:none">✕</button>
+      </div>
+
+      <div id="prod-product-preview" style="display:none"></div>
+
+      <div id="prod-qty-row" style="display:none;margin-top:10px">
+        <div class="mod-step-desc" style="margin-bottom:6px">Cantidad pedida</div>
+        <div class="sbox">
+          <span class="sico">🔢</span>
+          <input id="prod-qty" type="number" min="1" value="1" inputmode="numeric"/>
+        </div>
+        <button class="mod-confirm-btn" style="margin-top:10px" onclick="prodAddItem()">+ Agregar al pedido</button>
+      </div>
+    </div>
+
+    <div class="mod-card">
+      <div class="mod-step-label" style="font-size:14px">📋 Pegar lista de códigos</div>
+      <div class="mod-step-desc">Un código por línea. Opcional: cantidad separada por espacio o coma (ej: <b style="color:#e6edf3">543283 4</b>). Si repites un código, las cantidades se suman.</div>
+      <textarea id="prod-bulk" rows="4" placeholder="543283 2&#10;379795&#10;429647,5" style="width:100%;margin-top:8px;background:#010409;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:10px;font-family:monospace;font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
+      <button class="mod-back-btn" style="margin-top:8px" onclick="prodAddBulk()">+ Agregar lista</button>
+      <div id="prod-bulk-err" style="font-size:12px;color:#f85149;margin-top:6px;display:none"></div>
+    </div>
+
+    <div id="prod-resumen-cards" style="display:none;grid-template-columns:repeat(2,1fr);gap:10px"></div>
+
+    <!-- Pedido actual -->
+    <div class="mod-card" id="prod-list-card" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="mod-step-label">🧾 Pedido actual</div>
+        <div id="prod-count" style="background:#0d2136;border:1px solid #1d3d5c;border-radius:20px;padding:3px 10px;font-size:12px;color:#58a6ff;font-weight:700"></div>
+      </div>
+      <div id="prod-items-list" style="display:flex;flex-direction:column;gap:7px"></div>
+
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="mod-confirm-btn" style="margin-top:0" onclick="prodGenerarPicking()">🧭 Generar picking</button>
+        <button class="mod-back-btn" onclick="prodClearListClick()">🗑 Limpiar pedido</button>
+      </div>
+    </div>
+
+    <div id="prod-empty-card" class="mod-card" style="text-align:center;padding:24px;color:#484f58;font-size:13px">
+      <div style="font-size:32px;margin-bottom:8px">🏭</div>
+      Aún no has agregado productos al pedido
+    </div>
+
+    <!-- Picking generado -->
+    <div class="mod-card" id="prod-picking-card" style="display:none">
+      <div class="mod-step-label" style="font-size:14px">🧭 Picking — Calle 5 → 1</div>
+      <div class="mod-step-desc" id="prod-picking-faltantes" style="display:none;color:#f85149"></div>
+      <div id="prod-picking-list" style="margin-top:8px;display:flex;flex-direction:column;gap:12px"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="mod-back-btn" onclick="exportProdExcel()">📊 Exportar Excel</button>
+        <button class="mod-back-btn" onclick="exportProdPDF()">📄 Exportar PDF</button>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /section-produccion -->
 
 <script>
 // ===== LISTAR CONSECUTIVO =====
@@ -6797,6 +6875,335 @@ function exportTrzPDF() {
   doc.text('By: Vxniel', 40, doc.internal.pageSize.getHeight() - 20);
   doc.save(`Trazabilidad_${trzProductoActual.cod}.pdf`);
 }
+
+// ===== PRODUCCIÓN (pedido por códigos + picking por calle) =====
+let prodCurrentProduct = null;
+let prodLastPicking = null;
+
+function getProdList() {
+  try { return JSON.parse(localStorage.getItem('dimerc_produccion')||'[]'); }
+  catch(e) { return []; }
+}
+function setProdList(list) {
+  localStorage.setItem('dimerc_produccion', JSON.stringify(list));
+}
+
+function prodFindProduct(v) {
+  const qq = (v||'').trim().toLowerCase();
+  if (!qq) return null;
+  let found = null;
+  if (qq.length >= 7 && /^\d+$/.test(qq)) {
+    const hits = Object.keys(BIDX).filter(b => b.includes(qq));
+    if (hits.length) found = DATA[BIDX[hits[0]][0]];
+  }
+  if (!found) found = DATA.find(d => d.cod.toLowerCase() === qq);
+  if (!found) found = DATA.find(d => d.cod.toLowerCase().includes(qq) || d.desc.toLowerCase().includes(qq));
+  return found || null;
+}
+
+function prodClear() {
+  document.getElementById('prod-cod').value = '';
+  document.getElementById('prod-xbtn').style.display = 'none';
+  document.getElementById('prod-product-preview').style.display = 'none';
+  document.getElementById('prod-qty-row').style.display = 'none';
+  prodCurrentProduct = null;
+}
+
+function prodReset() {
+  prodClear();
+  document.getElementById('prod-bulk').value = '';
+  document.getElementById('prod-bulk-err').style.display = 'none';
+  document.getElementById('prod-picking-card').style.display = 'none';
+  prodLastPicking = null;
+}
+
+function prodSearchProduct(v) {
+  const preview = document.getElementById('prod-product-preview');
+  const qtyRow = document.getElementById('prod-qty-row');
+  if (!v) { preview.style.display = 'none'; qtyRow.style.display = 'none'; prodCurrentProduct = null; return; }
+
+  const found = prodFindProduct(v);
+  if (!found) {
+    preview.innerHTML = `<div class="mod-product-preview" style="background:#2a0f0f;border-color:#f85149"><div style="color:#f85149;font-size:13px;font-weight:700">⚠️ Producto no encontrado</div><div style="color:#f8949099;font-size:11px;margin-top:3px">Código escaneado: ${v}</div></div>`;
+    preview.style.display = 'block'; qtyRow.style.display = 'none'; prodCurrentProduct = null; return;
+  }
+  prodCurrentProduct = found;
+  preview.innerHTML = `<div class="mod-product-preview">
+    <div style="font-size:13px;color:#e6edf3;font-weight:600">${found.desc}</div>
+    <div style="font-size:11px;color:#7d8590;margin-top:3px">Código: <b style="color:#58a6ff">${found.cod}</b> · Stock: ${found.stock} · Ubicación: ${found.ubic||'—'}</div>
+  </div>`;
+  preview.style.display = 'block';
+  qtyRow.style.display = 'block';
+  document.getElementById('prod-qty').value = 1;
+}
+
+function prodAgregarAlPedido(cod, desc, cantidad) {
+  const list = getProdList();
+  const existing = list.find(it => it.cod === cod);
+  if (existing) existing.cantidad += cantidad;
+  else list.push({ cod, desc, cantidad, ts: getOfficialNow().toLocaleString('es-CL') });
+  setProdList(list);
+}
+
+function prodAddItem() {
+  if (!prodCurrentProduct) return;
+  const qty = parseInt(document.getElementById('prod-qty').value) || 1;
+  if (qty < 1) { alert('La cantidad debe ser al menos 1.'); return; }
+  prodAgregarAlPedido(prodCurrentProduct.cod, prodCurrentProduct.desc, qty);
+  prodClear();
+  renderProdList();
+  document.getElementById('prod-cod').focus();
+}
+
+function prodAddBulk() {
+  const raw = document.getElementById('prod-bulk').value;
+  const errBox = document.getElementById('prod-bulk-err');
+  const lineas = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lineas.length) { errBox.style.display = 'none'; return; }
+
+  const noEncontrados = [];
+  let agregados = 0;
+  lineas.forEach(linea => {
+    const partes = linea.split(/[\s,]+/).filter(Boolean);
+    const codBuscado = partes[0];
+    const qty = partes[1] ? (parseInt(partes[1]) || 1) : 1;
+    const found = prodFindProduct(codBuscado);
+    if (!found) { noEncontrados.push(codBuscado); return; }
+    prodAgregarAlPedido(found.cod, found.desc, qty);
+    agregados++;
+  });
+
+  if (noEncontrados.length) {
+    errBox.textContent = `⚠️ No se encontraron ${noEncontrados.length} código(s): ${noEncontrados.join(', ')}`;
+    errBox.style.display = 'block';
+  } else {
+    errBox.style.display = 'none';
+  }
+
+  if (agregados) {
+    document.getElementById('prod-bulk').value = '';
+    renderProdList();
+  }
+}
+
+function prodRemoveItem(idx) {
+  const list = getProdList();
+  list.splice(idx, 1);
+  setProdList(list);
+  renderProdList();
+}
+
+function prodClearListClick() {
+  if (!confirm('¿Limpiar todo el pedido actual?')) return;
+  localStorage.removeItem('dimerc_produccion');
+  document.getElementById('prod-picking-card').style.display = 'none';
+  prodLastPicking = null;
+  renderProdList();
+}
+
+function renderProdList() {
+  const list = getProdList();
+  const listCard = document.getElementById('prod-list-card');
+  const emptyCard = document.getElementById('prod-empty-card');
+  const itemsList = document.getElementById('prod-items-list');
+  const count = document.getElementById('prod-count');
+  const resumen = document.getElementById('prod-resumen-cards');
+
+  if (!list.length) {
+    listCard.style.display = 'none';
+    emptyCard.style.display = 'block';
+    resumen.style.display = 'none';
+    return;
+  }
+
+  listCard.style.display = 'block';
+  emptyCard.style.display = 'none';
+  count.textContent = list.length + (list.length===1 ? ' producto' : ' productos');
+
+  const totalUnidades = list.reduce((s,it) => s + it.cantidad, 0);
+  resumen.style.display = 'grid';
+  resumen.innerHTML = `
+    <div class="mod-product-preview" style="text-align:center">
+      <div style="font-size:22px;font-weight:800;color:#58a6ff">${list.length}</div>
+      <div style="font-size:11px;color:#7d8590;margin-top:2px">Productos distintos</div>
+    </div>
+    <div class="mod-product-preview" style="text-align:center">
+      <div style="font-size:22px;font-weight:800;color:#3fb950">${totalUnidades}</div>
+      <div style="font-size:11px;color:#7d8590;margin-top:2px">Unidades totales pedidas</div>
+    </div>`;
+
+  itemsList.innerHTML = list.map((it, idx) => `
+    <div class="mod-product-preview" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div>
+        <div style="font-size:13px;color:#e6edf3;font-weight:600">${it.desc}</div>
+        <div style="font-size:11px;color:#7d8590;margin-top:2px">Código: <b style="color:#58a6ff">${it.cod}</b> · Cantidad: <b style="color:#3fb950">${it.cantidad}</b></div>
+      </div>
+      <button class="xbtn2" style="display:block" onclick="prodRemoveItem(${idx})">✕</button>
+    </div>
+  `).join('');
+}
+
+// Determina la ubicación "de picking" de un producto, priorizando la zona de retiro habitual
+function prodPickLocation(d) {
+  const ubics = (d.ubic||'').split(',').map(u => u.trim()).filter(Boolean);
+  const parsed = ubics.map(u => ({ raw: u, info: parseUbicParts(u) })).filter(x => x.info);
+  if (!parsed.length) return null;
+  const prioridad = ['F','PB','FV','VA','VZ'];
+  for (const z of prioridad) {
+    const hit = parsed.find(x => x.info.zona === z);
+    if (hit) return hit;
+  }
+  return parsed[0];
+}
+
+function prodGenerarPicking() {
+  const list = getProdList();
+  if (!list.length) { alert('Agrega productos al pedido primero.'); return; }
+
+  const faltantes = [];
+  const items = [];
+  list.forEach(it => {
+    const d = DATA.find(p => p.cod === it.cod);
+    if (!d) { faltantes.push(it.cod); return; }
+    const loc = prodPickLocation(d);
+    items.push({
+      cod: it.cod,
+      desc: it.desc,
+      cantidad: it.cantidad,
+      ubic: loc ? loc.raw : (d.ubic || '—'),
+      calle: loc ? loc.info.calle : (d.calle || '00'),
+      _sortKey: loc ? [parseInt(loc.info.lado)||0, parseInt(loc.info.fila)||0, parseInt(loc.info.altura)||0, parseInt(loc.info.dep)||0, parseInt(loc.info.prof)||0] : [0,0,0,0,0]
+    });
+  });
+
+  const grupos = {};
+  items.forEach(it => { (grupos[it.calle] = grupos[it.calle] || []).push(it); });
+
+  const callesOrdenadas = Object.keys(grupos).sort((a,b) => (parseInt(b)||0) - (parseInt(a)||0));
+  callesOrdenadas.forEach(c => {
+    grupos[c].sort((a,b) => {
+      for (let i=0; i<5; i++) { if (b._sortKey[i] !== a._sortKey[i]) return b._sortKey[i] - a._sortKey[i]; }
+      return 0;
+    });
+  });
+
+  prodLastPicking = callesOrdenadas.map(c => ({ calle: c, items: grupos[c] }));
+  renderProdPicking(prodLastPicking, faltantes);
+}
+
+function renderProdPicking(grupos, faltantes) {
+  const card = document.getElementById('prod-picking-card');
+  const faltantesEl = document.getElementById('prod-picking-faltantes');
+  const listEl = document.getElementById('prod-picking-list');
+
+  if (faltantes && faltantes.length) {
+    faltantesEl.textContent = `⚠️ No se encontraron en la base de datos: ${faltantes.join(', ')}`;
+    faltantesEl.style.display = 'block';
+  } else {
+    faltantesEl.style.display = 'none';
+  }
+
+  listEl.innerHTML = grupos.map(g => `
+    <div>
+      <div style="font-weight:700;color:#58a6ff;font-size:13px;margin-bottom:6px">📍 ${CI_CALLES[g.calle] || ('Calle ' + g.calle)} (${g.items.length} producto${g.items.length===1?'':'s'})</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${g.items.map(it => `
+          <div class="mod-product-preview" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <div>
+              <div style="font-size:13px;color:#e6edf3;font-weight:600">${it.desc}</div>
+              <div style="font-size:11px;color:#7d8590;margin-top:2px">Código: <b style="color:#58a6ff">${it.cod}</b> · <span class="mod-product-ubic">${it.ubic}</span></div>
+            </div>
+            <div style="font-size:18px;font-weight:800;color:#3fb950;white-space:nowrap">${it.cantidad}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function prodGetPickingRows() {
+  if (!prodLastPicking) return [];
+  const rows = [];
+  prodLastPicking.forEach(g => {
+    g.items.forEach(it => {
+      rows.push({
+        Calle: CI_CALLES[g.calle] || ('Calle ' + g.calle),
+        Codigo: it.cod,
+        Producto: it.desc,
+        Ubicacion: it.ubic,
+        Cantidad: it.cantidad
+      });
+    });
+  });
+  return rows;
+}
+
+function exportProdExcel() {
+  const rows = prodGetPickingRows();
+  if (!rows.length) { alert('Genera el picking primero.'); return; }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:12},{wch:12},{wch:45},{wch:22},{wch:10}];
+  const lastRow = rows.length + 2;
+  XLSX.utils.sheet_add_aoa(ws, [['By: Vxniel']], { origin: `A${lastRow}` });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Picking');
+  const now = new Date();
+  const fecha = String(now.getDate()).padStart(2,'0') + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + now.getFullYear();
+  XLSX.writeFile(wb, `Picking_Produccion(${fecha}).xlsx`);
+}
+
+function exportProdPDF() {
+  const rows = prodGetPickingRows();
+  if (!rows.length) { alert('Genera el picking primero.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  doc.setFontSize(14);
+  doc.text('Picking de Producción — DCCP', 30, 24);
+  doc.setFontSize(9);
+  doc.text('Generado: ' + getOfficialNow().toLocaleString('es-CL') + ' · Orden: Calle 5 → 1, ubicación mayor a menor', 30, 40);
+
+  doc.autoTable({
+    startY: 50,
+    head: [['Calle','Código','Producto','Ubicación','Cantidad']],
+    body: rows.map(r => [r.Calle, r.Codigo, r.Producto, r.Ubicacion, r.Cantidad]),
+    styles: { fontSize: 7.5, cellPadding: 4, valign: 'middle', overflow: 'linebreak' },
+    headStyles: { fillColor: [31, 56, 84], fontSize: 8, halign: 'center' },
+    bodyStyles: { minCellHeight: 14 },
+    columnStyles: {
+      0: { cellWidth: 70, halign: 'center' },
+      1: { cellWidth: 60, halign: 'center' },
+      2: { cellWidth: 300 },
+      3: { cellWidth: 110 },
+      4: { cellWidth: 55, halign: 'center' }
+    },
+    margin: { left: 30, right: 30 }
+  });
+
+  const pageCount = doc.internal.getNumberOfPages();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text('By: Vxniel', pageW - 30, pageH - 12, { align: 'right' });
+  }
+
+  const now = new Date();
+  const fecha = String(now.getDate()).padStart(2,'0') + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + now.getFullYear();
+  doc.save(`Picking_Produccion(${fecha}).pdf`);
+}
+
+const prodCodEl = document.getElementById('prod-cod');
+prodCodEl.addEventListener('input', e => {
+  const v = e.target.value.trim();
+  document.getElementById('prod-xbtn').style.display = v ? 'block' : 'none';
+  prodSearchProduct(v);
+});
+prodCodEl.addEventListener('keydown', e => { if (e.key === 'Enter' && prodCurrentProduct) document.getElementById('prod-qty').focus(); });
 
 </script>
 
