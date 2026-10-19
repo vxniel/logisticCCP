@@ -2184,7 +2184,12 @@ function modSave() {
       desglose.push(`${zonePrefixOf(loc)} ${loc}: ${res}`);
     });
 
-    // Guardar stock en Firebase (usa la misma función que ubicación)
+    // Guardar stock en Firebase: estado_stock es lo que de verdad persiste el valor
+    // (lo que ven otras sesiones/dispositivos al cargar), "cambios" solo deja la bitácora.
+    if (window._db) {
+      window._db.ref('estado_stock/'+modCurrentProduct.cod).set({ zones: newZones, ts: getOfficialNow().toISOString(), user: matchUser })
+        .catch(e => console.error('❌ estado_stock set falló en modSave', e));
+    }
     safePush(modCurrentProduct.cod, modCurrentProduct.desc, String(totalNow), String(totalNew), matchUser, 'stock');
 
     // Update DATA in memory
@@ -4020,6 +4025,33 @@ function _setupFirebase() {
     if (typeof renderRotacion === 'function' && document.getElementById('section-rotacion') && document.getElementById('section-rotacion').style.display !== 'none') {
       renderRotacion();
     }
+  });
+
+  // ── Escuchar estado_stock en tiempo real para TODOS los productos ──
+  // Este es el valor que realmente persiste entre sesiones/dispositivos: sin este
+  // listener, un ajuste de stock guardado en Firebase solo se veía mientras esa
+  // sesión seguía abierta en el producto exacto (Modificar > Stock escuchando ese cod).
+  // Con esto, cualquier cambio guardado se refleja en TODAS las pantallas (Buscar,
+  // Conteo interno, etc.) de inmediato, incluso recién abriendo la app.
+  db.ref('estado_stock').on('value', snap => {
+    const all = snap.val() || {};
+    let changed = false;
+    Object.keys(all).forEach(cod => {
+      const entry = all[cod];
+      const zonesObj = entry && entry.zones;
+      if (!zonesObj) return;
+      const total = Object.values(zonesObj).reduce((s,v) => s + (parseInt(v)||0), 0);
+      DATA.forEach(p => {
+        if (p.cod === cod && (p.stock !== total)) {
+          p.stock = total;
+          p.zones = zonesObj;
+          changed = true;
+        } else if (p.cod === cod) {
+          p.zones = zonesObj;
+        }
+      });
+    });
+    if (changed && typeof render === 'function') render();
   });
 
     // ── Guardar cambio ────────────────
@@ -6318,16 +6350,49 @@ function ciSafePushFirebase(cod, desc, de, a, user, tipo) {
   };
   attempt(10);
 }
-// Aplica el ajuste de un producto: actualiza DATA.stock, registra en el historial y sincroniza por Firebase
+// Valor actual conocido de una ubicación concreta de un producto (igual lógica que
+// migrarValorLegacy, pero sin depender de modCurrentProduct/modLocSlots globales).
+function ciValorZonaActual(prod, zonesGuardadas, loc, ubicList) {
+  if (zonesGuardadas[loc] != null) return zonesGuardadas[loc];
+  const zona = zonePrefixOf(loc);
+  const mismaZona = ubicList.filter(u => zonePrefixOf(u)===zona);
+  if (mismaZona.length===1 && zonesGuardadas[zona] != null) return zonesGuardadas[zona];
+  if (zona === 'Vz' && prod.vzDet && prod.vzDet[loc] != null) return prod.vzDet[loc];
+  return 0;
+}
+// Aplica el ajuste de un producto: actualiza DATA.stock/zones, escribe estado_stock en
+// Firebase (lo que de verdad persiste entre sesiones/dispositivos), registra en el
+// historial y además deja la bitácora de "cambios" para trazabilidad.
 function ciAplicarAjusteUno(cod, user) {
   const data = getCIData();
   const key = ciFechaKey();
   const it = data[key] && data[key][ciCalleActiva] && data[key][ciCalleActiva][cod];
   if (!it) return false;
+  const prod = DATA.find(d => d.cod === cod);
+  if (!prod) return false;
   const stockAnterior = it.stock || 0;
   const nuevoStock = it.cantidad || 0;
-  const idx = DATA.findIndex(d => d.cod === cod);
-  if (idx >= 0) DATA[idx].stock = nuevoStock;
+
+  // Reparte el nuevo total entre las ubicaciones del producto: mantiene el valor
+  // conocido de las demás ubicaciones y ajusta la primera para que el total cuadre
+  // (si el producto tiene una sola ubicación, que es el caso más común, le asigna
+  // directamente el total contado).
+  const ubicList = (prod.ubic||'').split(',').map(u=>u.trim()).filter(Boolean);
+  const zonesGuardadas = prod.zones || {};
+  const zones = {};
+  ubicList.forEach(loc => { zones[loc] = ciValorZonaActual(prod, zonesGuardadas, loc, ubicList); });
+  if (ubicList.length) {
+    const otros = ubicList.slice(1).reduce((s,loc) => s + (zones[loc]||0), 0);
+    zones[ubicList[0]] = Math.max(0, nuevoStock - otros);
+  }
+
+  prod.stock = nuevoStock;
+  prod.zones = zones;
+
+  if (window._db) {
+    window._db.ref('estado_stock/'+cod).set({ zones, ts: getOfficialNow().toISOString(), user })
+      .catch(e => console.error('❌ estado_stock set falló (conteo interno)', e));
+  }
   ciSafePushFirebase(cod, it.desc, String(stockAnterior), String(nuevoStock), user, 'stock');
   const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
   hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo:'📦 Stock (Conteo interno)', cod, desc: it.desc, de: String(stockAnterior), a: String(nuevoStock), user });
