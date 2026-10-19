@@ -6272,13 +6272,15 @@ function renderCI() {
         <div style="font-size:11px;color:#7d8590">Con diferencia</div>
         <div style="font-size:22px;font-weight:800;color:#f85149">${conDiferencia}</div>
       </div>
-    </div>`;
+    </div>
+    ${conDiferencia>0 ? `<button class="mod-confirm-btn" style="margin-top:10px" onclick="ciAjustarTodosClick()">🛠️ Ajustar los ${conDiferencia} al sistema</button>` : ''}`;
 
   const itemHtml = cod => {
     const it = contados[cod];
     const diff = (it.cantidad||0) - (it.stock||0);
     const estado = diff === 0 ? 'ok' : (diff < 0 ? 'falta' : 'sobra');
     const badgeTxt = diff === 0 ? '✔ Coincide' : (diff < 0 ? `🔻 Faltan ${Math.abs(diff)}` : `🔺 Sobran ${diff}`);
+    const ajustado = !!it.ajustado;
     return `
       <div class="ci-item ${estado}">
         <div class="ci-item-top">
@@ -6296,6 +6298,8 @@ function renderCI() {
           <span>Sistema: <b>${it.stock}</b></span>
           <span>Ubic: ${it.ubic||'—'}</span>
         </div>
+        ${diff!==0 && !ajustado ? `<button class="mod-back-btn" style="margin-top:8px;width:100%" onclick="ciAjustarUnoClick('${cod}')">🛠️ Ajustar stock al sistema (${it.cantidad})</button>` : ''}
+        ${ajustado ? `<div style="font-size:11px;color:#3fb950;margin-top:8px;font-weight:600">✔ Stock del sistema ya ajustado a ${it.cantidad}</div>` : ''}
       </div>`;
   };
   lista.innerHTML = codsContados.length
@@ -6303,6 +6307,70 @@ function renderCI() {
     : '<div class="mod-card" style="text-align:center;color:#7d8590;font-size:13px">Aún no has registrado conteos para esta calle.</div>';
 
   ciRenderPendientes();
+}
+
+// ===== Aplicar conteo interno al sistema (ajustar stock según lo contado físicamente) =====
+function ciSafePushFirebase(cod, desc, de, a, user, tipo) {
+  const attempt = (tries) => {
+    if (typeof window.pushCambioFirebase === 'function' && window._fbReady) {
+      window.pushCambioFirebase(cod, desc, de, a, user, tipo);
+    } else if (tries > 0) {
+      setTimeout(() => attempt(tries - 1), 500);
+    } else {
+      console.error('❌ Firebase no disponible después de varios intentos (conteo interno)');
+    }
+  };
+  attempt(10);
+}
+// Aplica el ajuste de un producto: actualiza DATA.stock, registra en el historial y sincroniza por Firebase
+function ciAplicarAjusteUno(cod, user) {
+  const data = getCIData();
+  const key = ciFechaKey();
+  const it = data[key] && data[key][ciCalleActiva] && data[key][ciCalleActiva][cod];
+  if (!it) return false;
+  const stockAnterior = it.stock || 0;
+  const nuevoStock = it.cantidad || 0;
+  const idx = DATA.findIndex(d => d.cod === cod);
+  if (idx >= 0) DATA[idx].stock = nuevoStock;
+  ciSafePushFirebase(cod, it.desc, String(stockAnterior), String(nuevoStock), user, 'stock');
+  const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
+  hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo:'📦 Stock (Conteo interno)', cod, desc: it.desc, de: String(stockAnterior), a: String(nuevoStock), user });
+  if (hist.length>500) hist.pop();
+  localStorage.setItem('dimerc_hist', JSON.stringify(hist));
+  it.stock = nuevoStock;
+  it.ajustado = true;
+  setCIData(data);
+  return true;
+}
+function ciPedirUsuario() {
+  const user = (prompt('Tu nombre, para registrar quién hizo el ajuste:')||'').trim().toUpperCase();
+  return user || null;
+}
+function ciAjustarUnoClick(cod) {
+  const user = ciPedirUsuario();
+  if (!user) return;
+  if (ciAplicarAjusteUno(cod, user)) {
+    render();
+    renderCI();
+  }
+}
+function ciAjustarTodosClick() {
+  const data = getCIData();
+  const key = ciFechaKey();
+  const contados = (data[key] && data[key][ciCalleActiva]) || {};
+  const pendientes = Object.keys(contados).filter(cod => {
+    const it = contados[cod];
+    return !it.ajustado && (it.cantidad||0) !== (it.stock||0);
+  });
+  if (!pendientes.length) { alert('No hay diferencias pendientes de ajustar en esta calle.'); return; }
+  if (!confirm(`Vas a ajustar el stock del sistema de ${pendientes.length} producto(s) según lo contado. ¿Continuar?`)) return;
+  const user = ciPedirUsuario();
+  if (!user) return;
+  let aplicados = 0;
+  pendientes.forEach(cod => { if (ciAplicarAjusteUno(cod, user)) aplicados++; });
+  render();
+  renderCI();
+  alert(`✔ Se ajustaron ${aplicados} producto(s) al sistema.`);
 }
 function exportCIExcel() {
   const data = getCIData();
