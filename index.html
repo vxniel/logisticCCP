@@ -3126,6 +3126,14 @@ function nuevoProductoSave() {
       <div id="prod-bulk-err" style="font-size:12px;color:#f85149;margin-top:6px;display:none"></div>
     </div>
 
+    <div class="mod-card">
+      <div class="mod-step-label" style="font-size:14px">📥 Importar pedido desde Excel</div>
+      <div class="mod-step-desc">Sube un archivo .xlsx/.xls/.csv con una columna de código (Código, Codigo o SKU) y una de cantidad (Cantidad). Se suma a lo que ya tengas en el pedido.</div>
+      <input id="prod-import-file" type="file" accept=".xlsx,.xls,.csv" style="margin-top:10px;color:#e6edf3;font-size:12px" onchange="prodImportarExcel(this)"/>
+      <div id="prod-import-err" style="font-size:12px;color:#f85149;margin-top:6px;display:none"></div>
+      <div id="prod-import-ok" style="font-size:12px;color:#3fb950;margin-top:6px;display:none"></div>
+    </div>
+
     <div id="prod-resumen-cards" style="display:none;grid-template-columns:repeat(2,1fr);gap:10px"></div>
 
     <!-- Pedido actual -->
@@ -6948,6 +6956,8 @@ function prodReset() {
   prodClear();
   document.getElementById('prod-bulk').value = '';
   document.getElementById('prod-bulk-err').style.display = 'none';
+  document.getElementById('prod-import-err').style.display = 'none';
+  document.getElementById('prod-import-ok').style.display = 'none';
   document.getElementById('prod-picking-card').style.display = 'none';
   prodLastPicking = null;
   // si hay un picking en curso (ej: se cambió de pestaña y se volvió), lo restauramos
@@ -7026,6 +7036,66 @@ function prodAddBulk() {
     document.getElementById('prod-bulk').value = '';
     renderProdList();
   }
+}
+
+function prodImportarExcel(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  const errBox = document.getElementById('prod-import-err');
+  const okBox = document.getElementById('prod-import-ok');
+  errBox.style.display = 'none';
+  okBox.style.display = 'none';
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      if (!rows.length) {
+        errBox.textContent = '⚠️ El archivo no tiene filas de datos.';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      const keyCod = Object.keys(rows[0]).find(k => /^(c[oó]digo|cod|sku)$/i.test(k.trim()));
+      const keyQty = Object.keys(rows[0]).find(k => /^(cantidad|cant|qty)$/i.test(k.trim()));
+      if (!keyCod) {
+        errBox.textContent = '⚠️ No se encontró una columna de código (encabezado "Código", "Codigo" o "SKU").';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      const noEncontrados = [];
+      let agregados = 0, totalUnid = 0;
+      rows.forEach(row => {
+        const codRaw = String(row[keyCod] ?? '').trim();
+        if (!codRaw) return;
+        const qty = keyQty ? (parseInt(row[keyQty]) || 1) : 1;
+        const found = prodFindProduct(codRaw);
+        if (!found) { noEncontrados.push(codRaw); return; }
+        prodAgregarAlPedido(found.cod, found.desc, qty);
+        agregados++;
+        totalUnid += qty;
+      });
+
+      if (noEncontrados.length) {
+        errBox.textContent = `⚠️ No se encontraron ${noEncontrados.length} código(s): ${noEncontrados.join(', ')}`;
+        errBox.style.display = 'block';
+      }
+      if (agregados) {
+        okBox.textContent = `✔ Se importaron ${agregados} producto(s), ${totalUnid} unidades en total.`;
+        okBox.style.display = 'block';
+        renderProdList();
+      }
+    } catch (err) {
+      errBox.textContent = '⚠️ No se pudo leer el archivo: ' + err.message;
+      errBox.style.display = 'block';
+    } finally {
+      inputEl.value = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 function prodRemoveItem(idx) {
