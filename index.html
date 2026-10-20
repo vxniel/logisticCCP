@@ -4045,6 +4045,7 @@ function _setupFirebase() {
 
     // ── Escuchar cambios ──────────────
     const _fbStartTs = Date.now();
+    const _fbBaseTs = new Date('2026-10-16T18:22:00Z').getTime(); // base de datos actualizada 16-10 15:22 (UTC-3)
     // Guarda un cambio recibido de Firebase en el historial local correspondiente,
     // evitando duplicados si el propio dispositivo ya lo tenía registrado.
     function guardarEnHistorialLocal(key, entry) {
@@ -4067,7 +4068,14 @@ function _setupFirebase() {
       const d = snap.val();
       if (!d) return;
       const changeTs = d.ts ? new Date(d.ts).getTime() : 0;
-      if (changeTs && changeTs < _fbStartTs - 5000) return; // cambio anterior a conectarse (margen 5s)
+      // Cambios anteriores a la última actualización masiva de la base (16-10) ya vienen
+      // incluidos en DATA: se ignoran para no pisar datos nuevos.
+      if (changeTs && changeTs < _fbBaseTs) return;
+      // Cambios posteriores a la base pero anteriores a esta conexión: se REAPLICAN a DATA
+      // (reproducción del log) para que un dispositivo que estaba cerrado/offline se ponga
+      // al día. 'stock' no se reaplica aquí: su estado vive en estado_stock.
+      const esReplay = !!changeTs && changeTs < _fbStartTs - 5000;
+      if (esReplay && d.tipo === 'stock') return;
       const esEcoLocal = d.saveId && window._recentLocalSaves && window._recentLocalSaves.has(d.saveId);
       if (d.tipo === 'ubic') {
         if (typeof DATA !== 'undefined')
@@ -4081,7 +4089,8 @@ function _setupFirebase() {
                 const zonaDe = deUp.split('-')[0];
                 i = parts.findIndex(u => u.toUpperCase().split('-')[0] === zonaDe);
               }
-              if (i>=0) { parts[i] = d.a; p.ubic = parts.join(','); }
+              if (parts.some(u => u.toUpperCase() === (d.a||'').toUpperCase())) { /* ya aplicado */ }
+              else if (i>=0) { parts[i] = d.a; p.ubic = parts.join(','); }
               else if (d.a) { parts.push(d.a); p.ubic = parts.join(','); } // no se encontró: agrega la nueva
             }
           });
@@ -4105,7 +4114,7 @@ function _setupFirebase() {
       }
       try {
         if (typeof render === 'function') render();
-        _fbToast((d.tipo==='stock'?'📦':d.tipo==='vcto'?'⏰':d.tipo==='nuevo'?'🆕':'📍')+' '+d.user+': '+d.desc.substring(0,25)+'...');
+        if (!esReplay) _fbToast((d.tipo==='stock'?'📦':d.tipo==='vcto'?'⏰':d.tipo==='nuevo'?'🆕':'📍')+' '+d.user+': '+d.desc.substring(0,25)+'...');
       } catch(e) {
         console.error('Firebase listener: render/toast falló', e);
       }
