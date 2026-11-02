@@ -1221,7 +1221,7 @@ body.locked #section-produccion{display:none!important}
     <!-- STEP 3: name confirm -->
     <div class="mod-card" id="mod-step3" style="display:none">
       <div class="mod-step-label" id="step3-label">Paso 3 — Confirmar cambio</div>
-      <div class="mod-step-desc">Ingresa tu nombre para registrar el cambio</div>
+      <div class="mod-step-desc">Se registrará con tu usuario de inicio de sesión. Solo confirma el movimiento.</div>
       <div class="lfield" style="margin-top:10px">
         <span class="lico">👤</span>
         <input id="mod-pass" type="text" placeholder="Tu nombre" autocomplete="off"/>
@@ -1417,7 +1417,7 @@ function shakeLogin() {
 function autofillUserFields(user) {
   ['mod-pass','vcto-user','elab-user','nuevo-user'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.value = user;
+    if (el) { el.value = user; el.readOnly = true; }
   });
 }
 
@@ -1912,17 +1912,17 @@ function modConfirmStep() {
     <div class="mod-summary-row" style="border-top:1px solid #30363d;margin-top:4px;padding-top:4px"><span class="mod-summary-key" style="font-weight:700">TOTAL</span><span class="mod-summary-arrow" style="font-size:13px">${totalNow} → ${totalNew} uds.</span></div>`;
   }
   document.getElementById('mod-step3').style.display='block';
-  document.getElementById('mod-pass').value='';
+  document.getElementById('mod-pass').value=window._loggedUser||'';
   document.getElementById('mod-err').textContent='';
   const sum = document.getElementById('mod-summary');
   sum.style.display='block';
   sum.innerHTML = sum_html;
-  document.getElementById('mod-pass').focus();
+  if(!window._loggedUser) document.getElementById('mod-pass').focus();
 }
 
 function modBack() {
   document.getElementById('mod-step3').style.display='none';
-  document.getElementById('mod-pass').value='';
+  document.getElementById('mod-pass').value=window._loggedUser||'';
   document.getElementById('mod-err').textContent='';
 }
 
@@ -2241,7 +2241,7 @@ function modReset() {
     const sm = document.getElementById('mod-summary');
     if(sm) sm.style.display='none';
     const pass = document.getElementById('mod-pass');
-    if(pass) pass.value='';
+    if(pass) pass.value=window._loggedUser||'';
     const err = document.getElementById('mod-err');
     if(err) err.textContent='';
   } catch(e) { console.error('modReset: limpieza campos falló', e); }
@@ -2290,11 +2290,23 @@ function modClearHistory() {
   renderModHistory();
 }
 
+function histTipoExport(h) {
+  const t = h.tipo || '';
+  if (/Nuevo Producto|Ubicaci/i.test(t)) {
+    // Zona según la ubicación: Pb, Fv, F, Va, Vz
+    const u = String(h.a || h.newUbic || h.de || h.oldUbic || '').split(',')[0].trim();
+    const z = u.split('-')[0].toUpperCase();
+    const MAP = { PB:'Pb', FV:'Fv', F:'F', VA:'Va', VZ:'Vz' };
+    if (MAP[z]) return MAP[z];
+  }
+  return t.replace(/[^\x20-\x7EÀ-ÿ]/g,'').replace(/\s+/g,' ').trim();
+}
+
 function getHistoryRows() {
   const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
   return hist.map(h => ({
     Fecha: h.ts || '',
-    Tipo: h.tipo || '',
+    Tipo: histTipoExport(h),
     Codigo: h.cod || '',
     Producto: h.desc || '',
     De: h.de || h.oldUbic || '',
@@ -2420,7 +2432,7 @@ function nuevoProductoSave() {
   const barraInput = document.getElementById('nuevo-barra').value.trim();
   const desc = document.getElementById('nuevo-desc').value.trim();
   const ubic = document.getElementById('nuevo-ubic').value.trim().toUpperCase();
-  const user = document.getElementById('nuevo-user').value.trim().toUpperCase();
+  const user = (window._loggedUser || document.getElementById('nuevo-user').value.trim()).toUpperCase();
 
   if(!cod) { err.textContent='⚠️ Ingresa el código del producto'; return; }
   if(!desc) { err.textContent='⚠️ Ingresa la descripción'; return; }
