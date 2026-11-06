@@ -2351,8 +2351,8 @@ function histRangePreset(k) {
   const f = document.getElementById('hist-from'), t = document.getElementById('hist-to');
   const hoy = getOfficialNow();
   if (k === 'hoy') { f.value = t.value = histYMD(hoy); histSetTimes('00:00','23:59'); }
-  else if (k === 'manana') { f.value = t.value = histYMD(hoy); histSetTimes('00:00','13:59'); }
-  else if (k === 'tarde') { f.value = t.value = histYMD(hoy); histSetTimes('14:00','23:59'); }
+  else if (k === 'manana') { f.value = t.value = histYMD(hoy); histSetTimes('09:00','13:00'); }
+  else if (k === 'tarde') { f.value = t.value = histYMD(hoy); histSetTimes('14:00','18:45'); }
   else if (k === 'ayer') { const a = new Date(hoy); a.setDate(a.getDate()-1); f.value = t.value = histYMD(a); histSetTimes('00:00','23:59'); }
   else { f.value = ''; t.value = ''; histSetTimes('00:00','23:59'); }
   histRangeChanged();
