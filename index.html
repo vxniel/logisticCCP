@@ -1248,6 +1248,19 @@ body.locked #section-produccion{display:none!important}
     <div class="mod-card" id="mod-history-card" style="display:none">
       <div class="mod-step-label">📋 Historial de cambios</div>
       <div id="mod-history-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+      <div style="margin-top:12px;padding:10px;border:1px solid #30363d;border-radius:8px;background:#0d1117">
+        <div style="font-size:12px;font-weight:700;color:#e6edf3;margin-bottom:6px">📅 Rango de fechas a exportar</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <label style="font-size:11px;color:#7d8590;display:flex;flex-direction:column;gap:3px">Desde
+            <input type="date" id="hist-from" onchange="histRangeChanged()" style="background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:7px 8px;font-size:13px"/></label>
+          <label style="font-size:11px;color:#7d8590;display:flex;flex-direction:column;gap:3px">Hasta
+            <input type="date" id="hist-to" onchange="histRangeChanged()" style="background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:7px 8px;font-size:13px"/></label>
+          <button class="mod-back-btn" onclick="histRangePreset('hoy')">Hoy</button>
+          <button class="mod-back-btn" onclick="histRangePreset('ayer')">Ayer</button>
+          <button class="mod-back-btn" onclick="histRangePreset('todo')">Todo</button>
+        </div>
+        <div id="hist-range-info" style="font-size:12px;color:#7d8590;margin-top:6px"></div>
+      </div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="mod-back-btn" onclick="exportHistoryExcel()">📊 Exportar Excel</button>
         <button class="mod-back-btn" onclick="exportHistoryPDF()">📄 Exportar PDF</button>
@@ -2166,7 +2179,7 @@ function modSave() {
     safePush(modCurrentProduct.cod, modCurrentProduct.desc, oldUbicPart, newUbicPart, matchUser, 'ubic');
     const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
     hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo:'📍 Ubicación ('+zonePrefixOf(oldUbicPart)+')', cod: modCurrentProduct.cod, desc: modCurrentProduct.desc, de: oldUbicPart, a: newUbicPart, user: matchUser });
-    if(hist.length>500) hist.pop();
+    if(hist.length>5000) hist.pop();
     localStorage.setItem('dimerc_hist', JSON.stringify(hist));
     document.getElementById('mod-success-msg').textContent = modCurrentProduct.desc + ': ' + zonePrefixOf(oldUbicPart) + ' ' + oldUbicPart + ' → ' + newUbicPart + ' (por ' + matchUser + ')';
   } else {
@@ -2206,7 +2219,7 @@ function modSave() {
     // History
     const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
     hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo:'📦 Stock', cod: modCurrentProduct.cod, desc: modCurrentProduct.desc, de: totalNow, a: totalNew, user: matchUser });
-    if(hist.length>500) hist.pop();
+    if(hist.length>5000) hist.pop();
     localStorage.setItem('dimerc_hist', JSON.stringify(hist));
     const desgloseHtml = desglose.length > 1
       ? '<div style="margin-top:6px;display:flex;flex-direction:column;gap:2px">' + desglose.map(d => `<span style="font-family:monospace">${d} uds.</span>`).join('') + '</div>'
@@ -2278,14 +2291,17 @@ function renderModHistory() {
   const list = document.getElementById('mod-history-list');
   if(!hist.length) { card.style.display='none'; return; }
   card.style.display='block';
-  list.innerHTML = hist.map(h=>`<div class="hist-item">
+  const _tot = hist.length;
+  list.innerHTML = hist.slice(0,50).map(h=>`<div class="hist-item">
     <div class="hist-item-name">${h.tipo||'✏️'} ${h.desc}</div>
     <div class="hist-item-sub">Código: <b style="color:#e6edf3">${h.cod}</b> · <span>${h.de||h.oldUbic||'—'}</span> → <span style="color:#3fb950">${h.a||h.newUbic||'—'}</span></div>
     <div class="hist-item-user">✏️ ${h.user} · ${h.ts}</div>
-  </div>`).join('');
+  </div>`).join('') + (_tot>50 ? `<div style="font-size:11px;color:#7d8590;text-align:center;padding:4px">Mostrando los 50 más recientes de ${_tot}. El rango de exportación incluye todo el historial.</div>` : '');
+  histInitRange();
 }
 
 function modClearHistory() {
+  if (!confirm('¿Borrar TODO el historial de modificaciones de este dispositivo? Esta acción no se puede deshacer.')) return;
   localStorage.removeItem('dimerc_hist');
   renderModHistory();
 }
@@ -2302,8 +2318,68 @@ function histTipoExport(h) {
   return t.replace(/[^\x20-\x7EÀ-ÿ]/g,'').replace(/\s+/g,' ').trim();
 }
 
-function getHistoryRows() {
+// ── Rango de fechas del historial ──
+function histParseTs(h) {
+  if (h._tsRaw) { const d = new Date(h._tsRaw); if (!isNaN(d)) return d; }
+  const m = String(h.ts||'').match(/(\d{1,2})-(\d{1,2})-(\d{4}),?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (m) return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], +(m[6]||0));
+  return null;
+}
+function histYMD(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function histFmtDMY(ymd) { const [y,m,d] = ymd.split('-'); return `${d}-${m}-${y}`; }
+function histInitRange() {
+  const f = document.getElementById('hist-from'), t = document.getElementById('hist-to');
+  if (!f || !t) return;
+  if (!f.value || !t.value) { const hoy = histYMD(getOfficialNow()); f.value = hoy; t.value = hoy; }
+  histRangeChanged();
+}
+function histRangePreset(k) {
+  const f = document.getElementById('hist-from'), t = document.getElementById('hist-to');
+  const hoy = getOfficialNow();
+  if (k === 'hoy') { f.value = t.value = histYMD(hoy); }
+  else if (k === 'ayer') { const a = new Date(hoy); a.setDate(a.getDate()-1); f.value = t.value = histYMD(a); }
+  else { f.value = ''; t.value = ''; }
+  histRangeChanged();
+}
+// Devuelve {desde,hasta} (Date) o null = sin límite
+function histGetRange() {
+  const f = document.getElementById('hist-from'), t = document.getElementById('hist-to');
+  const fv = f && f.value, tv = t && t.value;
+  const desde = fv ? new Date(fv + 'T00:00:00') : null;
+  const hasta = tv ? new Date(tv + 'T23:59:59.999') : null;
+  return { desde, hasta, fv, tv };
+}
+function histFilteredEntries() {
   const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
+  const { desde, hasta } = histGetRange();
+  const out = hist.map(h => ({ h, d: histParseTs(h) })).filter(x => {
+    if (!desde && !hasta) return true;
+    if (!x.d) return false;
+    if (desde && x.d < desde) return false;
+    if (hasta && x.d > hasta) return false;
+    return true;
+  });
+  out.sort((a,b) => (b.d||0) - (a.d||0)); // más reciente primero
+  return out.map(x => x.h);
+}
+function histRangeLabel() {
+  const { fv, tv } = histGetRange();
+  if (!fv && !tv) return 'Todo el historial';
+  if (fv && tv) return fv === tv ? histFmtDMY(fv) : `${histFmtDMY(fv)} al ${histFmtDMY(tv)}`;
+  return fv ? `Desde ${histFmtDMY(fv)}` : `Hasta ${histFmtDMY(tv)}`;
+}
+function histRangeChanged() {
+  const info = document.getElementById('hist-range-info');
+  const { desde, hasta } = histGetRange();
+  if (desde && hasta && desde > hasta) { if (info) info.innerHTML = '<span style="color:#f85149">⚠️ "Desde" no puede ser posterior a "Hasta"</span>'; return; }
+  const n = histFilteredEntries().length;
+  if (info) info.textContent = `${n} movimiento${n===1?'':'s'} en el rango (${histRangeLabel()})`;
+}
+
+function getHistoryRows() {
+  const hist = histFilteredEntries();
   return hist.map(h => ({
     Fecha: h.ts || '',
     'Ubicación': histTipoExport(h),
@@ -2335,8 +2411,10 @@ function histResumen(rows) {
 }
 
 function exportHistoryExcel() {
+  const _r = histGetRange();
+  if (_r.desde && _r.hasta && _r.desde > _r.hasta) { alert('El rango de fechas no es válido: "Desde" es posterior a "Hasta".'); return; }
   const rows = getHistoryRows();
-  if(!rows.length) { alert('No hay historial para exportar.'); return; }
+  if(!rows.length) { alert('No hay modificaciones en el rango seleccionado (' + histRangeLabel() + ').'); return; }
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [{wch:20},{wch:14},{wch:10},{wch:45},{wch:22},{wch:22},{wch:14}];
   // Marca de agua al pie de la hoja
@@ -2348,18 +2426,20 @@ function exportHistoryExcel() {
   XLSX.utils.book_append_sheet(wb, ws, 'Historial');
   const now = new Date();
   const fecha = String(now.getDate()).padStart(2,'0') + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + now.getFullYear();
-  XLSX.writeFile(wb, `Modificaciones(${fecha}).xlsx`);
+  XLSX.writeFile(wb, `Modificaciones(${histRangeLabel().replace(/ al /,'_al_').replace(/\s+/g,'_')}).xlsx`);
 }
 
 function exportHistoryPDF() {
+  const _r = histGetRange();
+  if (_r.desde && _r.hasta && _r.desde > _r.hasta) { alert('El rango de fechas no es válido: "Desde" es posterior a "Hasta".'); return; }
   const rows = getHistoryRows();
-  if(!rows.length) { alert('No hay historial para exportar.'); return; }
+  if(!rows.length) { alert('No hay modificaciones en el rango seleccionado (' + histRangeLabel() + ').'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   doc.setFontSize(14);
   doc.text('Historial de Modificaciones — DCCP', 30, 24);
   doc.setFontSize(9);
-  doc.text('Generado: ' + getOfficialNow().toLocaleString('es-CL'), 30, 40);
+  doc.text('Generado: ' + getOfficialNow().toLocaleString('es-CL') + '  ·  Período: ' + histRangeLabel(), 30, 40);
 
   // Fecha corta: dd-mm-aaaa hh:mm
   const shortDate = (s) => {
@@ -2418,7 +2498,7 @@ function exportHistoryPDF() {
 
   const now = new Date();
   const fecha = String(now.getDate()).padStart(2,'0') + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + now.getFullYear();
-  doc.save(`Modificaciones(${fecha}).pdf`);
+  doc.save(`Modificaciones(${histRangeLabel().replace(/ al /,'_al_').replace(/\s+/g,'_')}).pdf`);
 }
 
 // ── mod scanner ──
@@ -2517,7 +2597,7 @@ function nuevoProductoSave() {
 
   const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
   hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo:'🆕 Nuevo Producto', cod: cod, desc: desc, de: '—', a: ubic, user: user });
-  if(hist.length>500) hist.pop();
+  if(hist.length>5000) hist.pop();
   localStorage.setItem('dimerc_hist', JSON.stringify(hist));
 
   if(typeof render === 'function') render();
@@ -3611,7 +3691,7 @@ function vctoSave() {
 
   const hist = JSON.parse(localStorage.getItem('dimerc_vcto_hist')||'[]');
   hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), cod: vctoCurrentProduct.cod, desc: vctoCurrentProduct.desc, de: oldVcto, a: newVcto, user: user, elab: newElab || undefined });
-  if(hist.length>500) hist.pop();
+  if(hist.length>5000) hist.pop();
   localStorage.setItem('dimerc_vcto_hist', JSON.stringify(hist));
 
   if (newElab) {
@@ -4108,7 +4188,7 @@ function _setupFirebase() {
         });
         if (yaExiste) return;
         hist.unshift(entry);
-        if (hist.length > 500) hist.pop();
+        if (hist.length > 5000) hist.pop();
         localStorage.setItem(key, JSON.stringify(hist));
       } catch(e) { console.error('guardarEnHistorialLocal falló', e); }
     }
@@ -6575,7 +6655,7 @@ function ciAplicarAjusteUno(cod, user) {
   ciSafePushFirebase(cod, it.desc, String(stockAnterior), String(nuevoStock), user, 'stock');
   const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
   hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo:'📦 Stock (Conteo interno)', cod, desc: it.desc, de: String(stockAnterior), a: String(nuevoStock), user });
-  if (hist.length>500) hist.pop();
+  if (hist.length>5000) hist.pop();
   localStorage.setItem('dimerc_hist', JSON.stringify(hist));
   it.stock = nuevoStock;
   it.ajustado = true;
