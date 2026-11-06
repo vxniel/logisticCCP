@@ -1272,7 +1272,7 @@ body.locked #section-produccion{display:none!important}
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="mod-back-btn" onclick="exportHistoryExcel()">📊 Exportar Excel</button>
         <button class="mod-back-btn" onclick="exportHistoryPDF()">📄 Exportar PDF</button>
-        <button class="mod-back-btn" onclick="modClearHistory()">🗑 Limpiar historial</button>
+        <button class="mod-back-btn" onclick="modClearHistory()">🧹 Limpiar pantalla</button>
       </div>
     </div>
 
@@ -2299,6 +2299,8 @@ function renderModHistory() {
   const list = document.getElementById('mod-history-list');
   if(!hist.length) { card.style.display='none'; return; }
   card.style.display='block';
+  let _desde = 0; try { _desde = parseInt(localStorage.getItem('dimerc_hist_view_from')||'0',10) || 0; } catch(e){}
+  const _guardados = hist.length;
   const esc = t => String(t==null?'':t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
   const item = h => `<div class="hist-item">
     <div class="hist-item-name">${esc(h.tipo||'✏️')} ${esc(h.desc)}</div>
@@ -2310,7 +2312,7 @@ function renderModHistory() {
   const ayerD = getOfficialNow(); ayerD.setDate(ayerD.getDate()-1);
   const ayerKey = histYMD(ayerD);
   const grupos = {};
-  hist.map(h => ({ h, d: histParseTs(h) })).sort((x,y) => (y.d||0) - (x.d||0)).forEach(x => {
+  hist.map(h => ({ h, d: histParseTs(h) })).filter(x => !_desde || (x.d && x.d.getTime() > _desde)).sort((x,y) => (y.d||0) - (x.d||0)).forEach(x => {
     const k = x.d ? histYMD(x.d) : 'sin-fecha';
     (grupos[k] = grupos[k] || []).push(x.h);
   });
@@ -2331,13 +2333,21 @@ function renderModHistory() {
       </details>`;
     }).join('');
   }
+  if (_desde) {
+    const visibles = Object.values(grupos).reduce((n,a) => n + a.length, 0);
+    html = `<div style="font-size:11px;color:#7d8590;padding:6px 8px;border:1px dashed #30363d;border-radius:6px">🧹 Pantalla limpia · ${_guardados} movimiento${_guardados===1?'':'s'} guardado${_guardados===1?'':'s'} (no se borró nada; las exportaciones los incluyen). <a href="#" onclick="histMostrarTodo();return false" style="color:#58a6ff">Mostrar historial guardado</a></div>` + html;
+  }
   list.innerHTML = html;
   histInitRange();
 }
 
+// Limpia SOLO la vista de la página: no borra el historial guardado (las exportaciones lo siguen incluyendo)
 function modClearHistory() {
-  if (!confirm('¿Borrar TODO el historial de modificaciones de este dispositivo? Esta acción no se puede deshacer.')) return;
-  localStorage.removeItem('dimerc_hist');
+  try { localStorage.setItem('dimerc_hist_view_from', String(Date.now())); } catch(e) {}
+  renderModHistory();
+}
+function histMostrarTodo() {
+  try { localStorage.removeItem('dimerc_hist_view_from'); } catch(e) {}
   renderModHistory();
 }
 
