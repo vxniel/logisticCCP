@@ -1253,9 +1253,17 @@ body.locked #section-produccion{display:none!important}
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
           <label style="font-size:11px;color:#7d8590;display:flex;flex-direction:column;gap:3px">Desde
             <input type="date" id="hist-from" onchange="histRangeChanged()" style="background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:7px 8px;font-size:13px"/></label>
+          <label style="font-size:11px;color:#7d8590;display:flex;flex-direction:column;gap:3px">Hora
+            <input type="time" id="hist-from-t" value="00:00" onchange="histRangeChanged()" style="background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:7px 8px;font-size:13px"/></label>
           <label style="font-size:11px;color:#7d8590;display:flex;flex-direction:column;gap:3px">Hasta
             <input type="date" id="hist-to" onchange="histRangeChanged()" style="background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:7px 8px;font-size:13px"/></label>
+          <label style="font-size:11px;color:#7d8590;display:flex;flex-direction:column;gap:3px">Hora
+            <input type="time" id="hist-to-t" value="23:59" onchange="histRangeChanged()" style="background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:7px 8px;font-size:13px"/></label>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
           <button class="mod-back-btn" onclick="histRangePreset('hoy')">Hoy</button>
+          <button class="mod-back-btn" onclick="histRangePreset('manana')">Hoy mañana</button>
+          <button class="mod-back-btn" onclick="histRangePreset('tarde')">Hoy tarde</button>
           <button class="mod-back-btn" onclick="histRangePreset('ayer')">Ayer</button>
           <button class="mod-back-btn" onclick="histRangePreset('todo')">Todo</button>
         </div>
@@ -2335,21 +2343,28 @@ function histInitRange() {
   if (!f.value || !t.value) { const hoy = histYMD(getOfficialNow()); f.value = hoy; t.value = hoy; }
   histRangeChanged();
 }
+function histSetTimes(a, b) {
+  const ft = document.getElementById('hist-from-t'), tt = document.getElementById('hist-to-t');
+  if (ft) ft.value = a; if (tt) tt.value = b;
+}
 function histRangePreset(k) {
   const f = document.getElementById('hist-from'), t = document.getElementById('hist-to');
   const hoy = getOfficialNow();
-  if (k === 'hoy') { f.value = t.value = histYMD(hoy); }
-  else if (k === 'ayer') { const a = new Date(hoy); a.setDate(a.getDate()-1); f.value = t.value = histYMD(a); }
-  else { f.value = ''; t.value = ''; }
+  if (k === 'hoy') { f.value = t.value = histYMD(hoy); histSetTimes('00:00','23:59'); }
+  else if (k === 'manana') { f.value = t.value = histYMD(hoy); histSetTimes('00:00','13:59'); }
+  else if (k === 'tarde') { f.value = t.value = histYMD(hoy); histSetTimes('14:00','23:59'); }
+  else if (k === 'ayer') { const a = new Date(hoy); a.setDate(a.getDate()-1); f.value = t.value = histYMD(a); histSetTimes('00:00','23:59'); }
+  else { f.value = ''; t.value = ''; histSetTimes('00:00','23:59'); }
   histRangeChanged();
 }
 // Devuelve {desde,hasta} (Date) o null = sin límite
 function histGetRange() {
-  const f = document.getElementById('hist-from'), t = document.getElementById('hist-to');
-  const fv = f && f.value, tv = t && t.value;
-  const desde = fv ? new Date(fv + 'T00:00:00') : null;
-  const hasta = tv ? new Date(tv + 'T23:59:59.999') : null;
-  return { desde, hasta, fv, tv };
+  const g = id => { const e = document.getElementById(id); return e ? e.value : ''; };
+  const fv = g('hist-from'), tv = g('hist-to');
+  const ft = g('hist-from-t') || '00:00', tt = g('hist-to-t') || '23:59';
+  const desde = fv ? new Date(fv + 'T' + ft + ':00') : null;
+  const hasta = tv ? new Date(tv + 'T' + tt + ':59.999') : null;
+  return { desde, hasta, fv, tv, ft, tt };
 }
 function histFilteredEntries() {
   const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
@@ -2365,10 +2380,16 @@ function histFilteredEntries() {
   return out.map(x => x.h);
 }
 function histRangeLabel() {
-  const { fv, tv } = histGetRange();
+  const { fv, tv, ft, tt } = histGetRange();
   if (!fv && !tv) return 'Todo el historial';
-  if (fv && tv) return fv === tv ? histFmtDMY(fv) : `${histFmtDMY(fv)} al ${histFmtDMY(tv)}`;
-  return fv ? `Desde ${histFmtDMY(fv)}` : `Hasta ${histFmtDMY(tv)}`;
+  const conH = ft !== '00:00' || tt !== '23:59';
+  const F = fv ? histFmtDMY(fv) + (conH ? ' ' + ft : '') : '';
+  const T = tv ? histFmtDMY(tv) + (conH ? ' ' + tt : '') : '';
+  if (fv && tv) {
+    if (fv === tv) return conH ? `${histFmtDMY(fv)} ${ft} a ${tt}` : histFmtDMY(fv);
+    return `${F} al ${T}`;
+  }
+  return fv ? `Desde ${F}` : `Hasta ${T}`;
 }
 function histRangeChanged() {
   const info = document.getElementById('hist-range-info');
@@ -2426,7 +2447,7 @@ function exportHistoryExcel() {
   XLSX.utils.book_append_sheet(wb, ws, 'Historial');
   const now = new Date();
   const fecha = String(now.getDate()).padStart(2,'0') + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + now.getFullYear();
-  XLSX.writeFile(wb, `Modificaciones(${histRangeLabel().replace(/ al /,'_al_').replace(/\s+/g,'_')}).xlsx`);
+  XLSX.writeFile(wb, `Modificaciones(${histRangeLabel().replace(/:/g,'-').replace(/ (al|a) /g,'_$1_').replace(/\s+/g,'_')}).xlsx`);
 }
 
 function exportHistoryPDF() {
@@ -2498,7 +2519,7 @@ function exportHistoryPDF() {
 
   const now = new Date();
   const fecha = String(now.getDate()).padStart(2,'0') + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + now.getFullYear();
-  doc.save(`Modificaciones(${histRangeLabel().replace(/ al /,'_al_').replace(/\s+/g,'_')}).pdf`);
+  doc.save(`Modificaciones(${histRangeLabel().replace(/:/g,'-').replace(/ (al|a) /g,'_$1_').replace(/\s+/g,'_')}).pdf`);
 }
 
 // ── mod scanner ──
