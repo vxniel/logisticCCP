@@ -2299,12 +2299,39 @@ function renderModHistory() {
   const list = document.getElementById('mod-history-list');
   if(!hist.length) { card.style.display='none'; return; }
   card.style.display='block';
-  const _tot = hist.length;
-  list.innerHTML = hist.slice(0,50).map(h=>`<div class="hist-item">
-    <div class="hist-item-name">${h.tipo||'✏️'} ${h.desc}</div>
-    <div class="hist-item-sub">Código: <b style="color:#e6edf3">${h.cod}</b> · <span>${h.de||h.oldUbic||'—'}</span> → <span style="color:#3fb950">${h.a||h.newUbic||'—'}</span></div>
-    <div class="hist-item-user">✏️ ${h.user} · ${h.ts}</div>
-  </div>`).join('') + (_tot>50 ? `<div style="font-size:11px;color:#7d8590;text-align:center;padding:4px">Mostrando los 50 más recientes de ${_tot}. El rango de exportación incluye todo el historial.</div>` : '');
+  const esc = t => String(t==null?'':t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const item = h => `<div class="hist-item">
+    <div class="hist-item-name">${esc(h.tipo||'✏️')} ${esc(h.desc)}</div>
+    <div class="hist-item-sub">Código: <b style="color:#e6edf3">${esc(h.cod)}</b> · <span>${esc(h.de||h.oldUbic||'—')}</span> → <span style="color:#3fb950">${esc(h.a||h.newUbic||'—')}</span></div>
+    <div class="hist-item-user">✏️ ${esc(h.user)} · ${esc(h.ts)}</div>
+  </div>`;
+  // Agrupar por día (más reciente primero)
+  const hoyKey = histYMD(getOfficialNow());
+  const ayerD = getOfficialNow(); ayerD.setDate(ayerD.getDate()-1);
+  const ayerKey = histYMD(ayerD);
+  const grupos = {};
+  hist.map(h => ({ h, d: histParseTs(h) })).sort((x,y) => (y.d||0) - (x.d||0)).forEach(x => {
+    const k = x.d ? histYMD(x.d) : 'sin-fecha';
+    (grupos[k] = grupos[k] || []).push(x.h);
+  });
+  const hoy = grupos[hoyKey] || [];
+  let html = `<div style="font-size:12px;font-weight:700;color:#e6edf3">Hoy · ${histFmtDMY(hoyKey)} <span style="color:#7d8590;font-weight:400">(${hoy.length} movimiento${hoy.length===1?'':'s'})</span></div>`;
+  html += hoy.length
+    ? hoy.slice(0,200).map(item).join('') + (hoy.length>200 ? `<div style="font-size:11px;color:#7d8590;text-align:center;padding:4px">Mostrando los 200 más recientes de hoy.</div>` : '')
+    : `<div style="font-size:12px;color:#7d8590;text-align:center;padding:10px;border:1px dashed #30363d;border-radius:6px">Sin modificaciones hoy</div>`;
+  const previos = Object.keys(grupos).filter(k => k !== hoyKey).sort().reverse();
+  if (previos.length) {
+    html += `<div style="font-size:12px;font-weight:700;color:#e6edf3;margin-top:8px">Días anteriores</div>`;
+    html += previos.map(k => {
+      const arr = grupos[k];
+      const nombre = k === 'sin-fecha' ? 'Sin fecha' : (histFmtDMY(k) + (k === ayerKey ? ' (ayer)' : ''));
+      return `<details style="border:1px solid #21262d;border-radius:6px;padding:6px 8px;background:#0d1117">
+        <summary style="cursor:pointer;font-size:12px;color:#e6edf3">${nombre} <span style="color:#7d8590">· ${arr.length} movimiento${arr.length===1?'':'s'}</span></summary>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">${arr.slice(0,100).map(item).join('')}${arr.length>100 ? `<div style="font-size:11px;color:#7d8590;text-align:center;padding:4px">Mostrando 100 de ${arr.length}. Usa el rango de fechas para exportar todo.</div>` : ''}</div>
+      </details>`;
+    }).join('');
+  }
+  list.innerHTML = html;
   histInitRange();
 }
 
@@ -2340,7 +2367,10 @@ function histFmtDMY(ymd) { const [y,m,d] = ymd.split('-'); return `${d}-${m}-${y
 function histInitRange() {
   const f = document.getElementById('hist-from'), t = document.getElementById('hist-to');
   if (!f || !t) return;
-  if (!f.value || !t.value) { const hoy = histYMD(getOfficialNow()); f.value = hoy; t.value = hoy; }
+  const hoy = histYMD(getOfficialNow());
+  if (!f.value || !t.value) { f.value = hoy; t.value = hoy; }
+  else if (window._histDiaInit && window._histDiaInit !== hoy && f.value === window._histDiaInit && t.value === window._histDiaInit) { f.value = hoy; t.value = hoy; } // cambió el día: el rango "hoy" pasa al nuevo día
+  window._histDiaInit = hoy;
   histRangeChanged();
 }
 function histSetTimes(a, b) {
