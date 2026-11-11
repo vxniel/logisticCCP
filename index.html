@@ -420,9 +420,14 @@ body.locked #section-produccion{display:none!important}
 .mp-detail{background:var(--mp-surface);border:1px solid var(--mp-line);border-left:6px solid var(--mp-beam);border-radius:4px;padding:10px 12px}
 .mp-detail h3{margin:0 0 6px;font-family:var(--mp-mono);font-weight:500;font-size:15px}
 .mp-detail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
-.mp-detail li{display:grid;grid-template-columns:64px 1fr auto;gap:8px;padding:6px 0;border-top:1px solid var(--mp-line);font-size:13px;align-items:baseline}
+.mp-detail li{display:grid;grid-template-columns:64px 1fr;gap:6px 8px;padding:8px 0;border-top:1px solid var(--mp-line);font-size:13px;align-items:baseline}
+.mp-edit{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mp-edit label{font-size:12px;color:var(--mp-muted)}
+.mp-qty{width:110px;font:inherit;font-size:16px;font-family:var(--mp-mono);padding:8px 10px;border:1px solid var(--mp-line);background:var(--mp-bg);color:var(--mp-fg);border-radius:4px}
+.mp-save{font:inherit;font-weight:600;padding:0 16px;min-height:44px;border:0;border-radius:4px;background:var(--mp-beam);color:#2b1f00;cursor:pointer}
+.mp-save:disabled{background:var(--mp-surface2);color:var(--mp-muted);cursor:not-allowed}
+.mp-fb{font-size:12px;color:var(--mp-muted)}
 .mp-detail li .c{font-family:var(--mp-mono);color:var(--mp-muted);font-size:12px}
-.mp-detail li .s{font-family:var(--mp-mono);font-size:12px}
 .mp-detail li.z .s{color:var(--mp-zero)}
 .mp-note{color:var(--mp-muted);font-size:12px;margin:0}
 #section-mapa button:focus-visible,#section-mapa input:focus-visible{outline:3px solid var(--mp-hit);outline-offset:2px}
@@ -4407,6 +4412,7 @@ function _setupFirebase() {
       });
     });
     if (changed && typeof render === 'function') render();
+    if (changed) { try { const sm = document.getElementById('section-mapa'); const ed = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('mp-qty'); if (sm && sm.style.display !== 'none' && !ed) renderMapaVirtual(); } catch(e) {} }
   });
 
     // ── Guardar cambio ────────────────
@@ -5067,12 +5073,73 @@ let mpFlat = [];       // para búsqueda
 const mpEsc = t => String(t==null?'':t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const mpNorm = t => String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
 
+// Stock de un producto en UNA ubicación (misma lógica que el modificador de stock)
+function mpUbicList(p) { return (p.ubic||'').split(',').map(u => u.trim()).filter(Boolean); }
+function mpStockLoc(p, loc) {
+  const z = p.zones || {};
+  if (z[loc] != null) return parseInt(z[loc]) || 0;
+  const list = mpUbicList(p);
+  if (list.length <= 1) return parseInt(p.stock) || 0;   // una sola ubicación: todo el stock está ahí
+  return parseInt(ciValorZonaActual(p, z, loc, list)) || 0;
+}
+function mpUsuario() {
+  let u = (window._loggedUser || '').trim();
+  if (!u) u = (prompt('Tu nombre, para registrar quién hizo el ajuste:') || '').trim().toUpperCase();
+  return u || null;
+}
+// Guarda el stock de una ubicación y lo propaga a toda la app (buscador, modificador, Firebase)
+function mpGuardarStock(cod, loc, inputId) {
+  const inp = document.getElementById(inputId), fb = document.getElementById(inputId + '-fb');
+  const nuevo = parseInt(inp.value, 10);
+  if (isNaN(nuevo) || nuevo < 0) { fb.style.color = '#f85149'; fb.textContent = 'Ingresa un número válido (0 o más)'; return; }
+  const prod = DATA.find(d => d.cod === cod);
+  if (!prod) return;
+  const user = mpUsuario();
+  if (!user) return;
+  const list = mpUbicList(prod), zonesPrev = prod.zones || {};
+  const anteriorLoc = mpStockLoc(prod, loc);
+  const zones = {};
+  list.forEach(l => { zones[l] = mpStockLoc(prod, l); });
+  zones[loc] = nuevo;
+  const totalAnt = parseInt(prod.stock) || 0;
+  const totalNuevo = list.reduce((sum, l) => sum + (zones[l] || 0), 0);
+  if (list.length > 1 && Object.keys(zonesPrev).length === 0 && totalNuevo !== totalAnt) {
+    if (!confirm(`Este producto está en ${list.length} ubicaciones y aún no tiene el stock desglosado por ubicación (total actual: ${totalAnt}).\n\nAl guardar, el total pasará a ${totalNuevo} y las otras ubicaciones quedarán en 0 hasta que las ajustes.\n\n¿Continuar?`)) return;
+  }
+  prod.stock = totalNuevo; prod.zones = zones;
+  if (window._db) {
+    window._db.ref('estado_stock/' + cod).set({ zones, ts: getOfficialNow().toISOString(), user })
+      .catch(e => console.error('❌ estado_stock set falló (mapa)', e));
+  }
+  const push = (tries) => {
+    if (typeof window.pushCambioFirebase === 'function' && window._fbReady) window.pushCambioFirebase(cod, prod.desc, String(totalAnt), String(totalNuevo), user, 'stock');
+    else if (tries > 0) setTimeout(() => push(tries - 1), 500);
+  };
+  push(10);
+  const hist = JSON.parse(localStorage.getItem('dimerc_hist') || '[]');
+  hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo: '📦 Stock (Mapa)', cod, desc: prod.desc, de: String(totalAnt), a: String(totalNuevo), user });
+  if (hist.length > 5000) hist.pop();
+  localStorage.setItem('dimerc_hist', JSON.stringify(hist));
+  try { render(); } catch (e) { console.error('render falló tras guardar stock (mapa)', e); }
+  try { renderModHistory(); } catch (e) {}
+  mpBuild(); mpRenderGrid(); mpRenderDetail();
+  const fb2 = document.getElementById(inputId + '-fb');
+  if (fb2) { fb2.style.color = '#3fb950'; fb2.textContent = `✓ Guardado: ${anteriorLoc} → ${nuevo}` + (list.length > 1 ? ` (total ${totalNuevo})` : ''); }
+}
+function mpQtyChanged(inputId, orig) {
+  const inp = document.getElementById(inputId), btn = document.getElementById(inputId + '-b'), fb = document.getElementById(inputId + '-fb');
+  const v = parseInt(inp.value, 10);
+  btn.disabled = isNaN(v) || v < 0 || v === orig;
+  if (fb) fb.textContent = '';
+}
+
 function mpBuild() {
   mpIdx = {}; mpFlat = [];
   DATA.forEach(p => {
     const seen = new Set();
-    (p.ubic||'').split(',').forEach(u => {
-      u = u.trim().toUpperCase();
+    (p.ubic||'').split(',').forEach(raw => {
+      raw = raw.trim();
+      const u = raw.toUpperCase();
       const i = parseUbicParts(u);
       if (!i || seen.has(u)) return;
       seen.add(u);
@@ -5080,7 +5147,7 @@ function mpBuild() {
       const z = (mpIdx[i.zona] = mpIdx[i.zona] || {});
       const sc = (z[sec] = z[sec] || {});
       const fl = (sc[fila] = sc[fila] || {});
-      (fl[cell] = fl[cell] || []).push({ cod: p.cod, desc: p.desc, stock: p.stock||0 });
+      (fl[cell] = fl[cell] || []).push({ cod: p.cod, desc: p.desc, loc: raw, stock: mpStockLoc(p, raw) });
       mpFlat.push({ zona: i.zona, sec, fila, cell, ubic: u, cod: p.cod, desc: p.desc, n: mpNorm(p.cod + ' ' + p.desc) });
     });
   });
@@ -5158,7 +5225,16 @@ function mpRenderDetail() {
   if (!it.length) { el.hidden = true; return; }
   const full = `${mp.zona}-${mp.sec}-${String(mp.fila).padStart(2,'0')}-${mp.cell}`;
   el.hidden = false;
-  el.innerHTML = `<h3>${full} · ${it.length} producto${it.length!==1?'s':''}</h3><ul>` + it.map(p => `<li class="${p.stock===0?'z':''}"><span class="c">${mpEsc(p.cod)}</span><span>${mpEsc(p.desc)}</span><span class="s">${(p.stock||0).toLocaleString('es-CL')} un.</span></li>`).join('') + '</ul>';
+  el.innerHTML = `<h3>${full} · ${it.length} producto${it.length!==1?'s':''}</h3><ul>` + it.map((p, n) => {
+    const id = 'mp-qty-' + n;
+    const multi = (DATA.find(d => d.cod === p.cod) || {}).ubic;
+    const nUb = multi ? multi.split(',').length : 1;
+    return `<li class="${p.stock===0?'z':''}"><span class="c">${mpEsc(p.cod)}</span><span>${mpEsc(p.desc)}${nUb>1 ? `<br><small style="color:var(--mp-muted)">Producto en ${nUb} ubicaciones: el total (${(parseInt((DATA.find(d => d.cod === p.cod)||{}).stock)||0).toLocaleString('es-CL')} un.) es la suma de todas.${Object.keys((DATA.find(d => d.cod === p.cod)||{}).zones||{}).length ? '' : ' Aún sin desglose por ubicación.'}</small>` : ''}</span>
+      <div class="mp-edit"><label for="${id}">Stock</label>
+        <input id="${id}" class="mp-qty" type="number" inputmode="numeric" min="0" step="1" value="${p.stock}" oninput="mpQtyChanged('${id}', ${p.stock})" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('${id}-b').click()}">
+        <button id="${id}-b" class="mp-save" type="button" disabled onclick="mpGuardarStock('${mpEsc(p.cod)}','${mpEsc(p.loc)}','${id}')">Guardar</button>
+        <span id="${id}-fb" class="mp-fb" role="status"></span></div></li>`;
+  }).join('') + '</ul>';
 }
 function mpRenderAll() {
   mpEnsure(); mpRenderTabs(); mpRenderFilas(); mpRenderGrid(); mpRenderDetail();
