@@ -375,18 +375,57 @@ body.locked #section-produccion{display:none!important}
 .mod-card{background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:14px}
 .indic-card{border-radius:8px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;min-height:88px}
 
-.rack-frame{background:#0d1117;border:1px solid #21262d;border-radius:10px;padding:16px;display:flex;flex-direction:column-reverse;gap:14px}
-.rack-level{display:flex;align-items:stretch;gap:8px;cursor:pointer;transition:transform .1s}
-.rack-level:active{transform:scale(.98)}
-.rack-level-label{flex-shrink:0;width:48px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#7d8590;background:#161b22;border-radius:6px}
-.rack-level-shelf{flex:1;display:flex;flex-direction:column;border-radius:6px;overflow:hidden;border:2px solid;min-height:60px}
-.rack-level-beam{height:6px;background:linear-gradient(90deg,#f0883e,#d97a2e);flex-shrink:0}
-.rack-level-inner{flex:1;display:flex;align-items:center;gap:6px;padding:8px 10px;overflow-x:auto}
-.rack-level-shelf.filled{background:#0d2136;border-color:#1d3d5c}
-.rack-level-shelf.empty{background:#161b22;border-color:#21262d;border-style:dashed}
-.rack-box{flex-shrink:0;width:34px;height:30px;background:#8b6b3d;border:1px solid #5c4526;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px}
-.rack-level-count{flex-shrink:0;font-size:11px;font-weight:700;color:#58a6ff;padding-right:6px}
-.rack-level-empty-txt{font-size:11px;color:#484f58;font-style:italic;padding:8px 10px}
+/* ===== Mapa de bodega (rack visto de frente) ===== */
+#section-mapa{--mp-bg:#0f1624;--mp-surface:#172238;--mp-surface2:#1f2c46;--mp-fg:#e8edf6;--mp-muted:#93a0b8;--mp-line:#2b3a58;--mp-beam:#f2b01e;--mp-upright:#6d9be8;--mp-hit:#ff8a3d;--mp-zero:#6b7690;--mp-heat0:#1f2c46;--mp-heat1:#5a4a18;--mp-heat2:#b98313;--mp-heat3:#f2b01e;--mp-disp:'Barlow Condensed','Arial Narrow',sans-serif;--mp-mono:ui-monospace,'IBM Plex Mono',monospace}
+#section-mapa .mp-root{display:flex;flex-direction:column;gap:16px;color:var(--mp-fg);font-size:14px;line-height:1.4}
+.mp-h1{font-family:var(--mp-disp);font-weight:700;font-size:34px;letter-spacing:.02em;margin:0;line-height:1;text-transform:uppercase}
+.mp-sub{color:var(--mp-muted);font-size:13px;margin:4px 0 0}
+.mp-tabs{display:grid;gap:6px}
+.mp-zonas{grid-template-columns:repeat(5,1fr)}
+.mp-secs{grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}
+.mp-tab{font-family:var(--mp-disp);font-weight:600;font-size:17px;letter-spacing:.03em;text-transform:uppercase;border:1px solid var(--mp-line);background:var(--mp-surface);color:var(--mp-fg);padding:9px 4px;border-radius:4px;cursor:pointer;line-height:1.1;min-width:0;min-height:44px}
+.mp-tab small{display:block;font-family:'Segoe UI',system-ui,sans-serif;font-size:10.5px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--mp-muted)}
+.mp-tab[aria-pressed="true"]{background:var(--mp-upright);border-color:var(--mp-upright);color:#0b1426}
+.mp-tab[aria-pressed="true"] small{color:#14213a}
+.mp-search{display:flex;gap:8px}
+.mp-search input{flex:1;min-width:0;font:inherit;padding:11px 12px;border:1px solid var(--mp-line);background:var(--mp-surface);color:var(--mp-fg);border-radius:4px}
+.mp-search button{font:inherit;padding:0 14px;border:1px solid var(--mp-line);background:var(--mp-surface2);color:var(--mp-fg);border-radius:4px;cursor:pointer}
+.mp-res{background:var(--mp-surface);border:1px solid var(--mp-line);border-radius:4px;max-height:260px;overflow:auto}
+.mp-res button{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;width:100%;text-align:left;padding:9px 10px;border:0;border-bottom:1px solid var(--mp-line);background:none;color:var(--mp-fg);font:inherit;cursor:pointer}
+.mp-res button:last-child{border-bottom:0}
+.mp-res .c{font-family:var(--mp-mono);color:var(--mp-muted);font-size:12px}
+.mp-res .l{grid-column:2;font-family:var(--mp-mono);font-size:12px;color:var(--mp-hit)}
+.mp-sec-title{font-family:var(--mp-disp);font-weight:600;font-size:20px;letter-spacing:.03em;text-transform:uppercase;margin:0;display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.mp-sec-title span{font-family:'Segoe UI',system-ui,sans-serif;font-size:12px;color:var(--mp-muted);text-transform:none;letter-spacing:0;font-weight:400}
+.mp-filas{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+.mp-fila{border:1px solid var(--mp-line);border-radius:4px;padding:6px 4px;text-align:center;cursor:pointer;background:var(--mp-heat0);color:var(--mp-fg);font:inherit;min-width:0;min-height:48px}
+.mp-fila b{display:block;font-family:var(--mp-disp);font-size:20px;line-height:1}
+.mp-fila i{display:block;font-style:normal;font-size:11px;font-family:var(--mp-mono)}
+.mp-fila[data-h="1"]{background:var(--mp-heat1)}.mp-fila[data-h="2"]{background:var(--mp-heat2)}.mp-fila[data-h="3"]{background:var(--mp-heat3)}
+.mp-fila[data-h="2"],.mp-fila[data-h="3"]{color:#2b1f00}
+.mp-fila[aria-pressed="true"]{outline:3px solid var(--mp-upright);outline-offset:1px}
+.mp-rack{background:var(--mp-surface);border:1px solid var(--mp-line);border-radius:4px;padding:10px;overflow-x:auto}
+.mp-grid{display:grid;gap:6px;min-width:min(100%,520px)}
+.mp-hd{font-family:var(--mp-disp);font-weight:600;font-size:15px;text-align:center;color:var(--mp-muted)}
+.mp-alt{display:flex;align-items:center;justify-content:center;font-family:var(--mp-disp);font-weight:600;font-size:15px;color:#0b1426;background:var(--mp-upright);border-radius:3px}
+.mp-cell{border:1px solid var(--mp-line);border-top:5px solid var(--mp-beam);background:var(--mp-bg);border-radius:3px;padding:5px 6px 6px;min-height:84px;cursor:pointer;text-align:left;font:inherit;color:var(--mp-fg);min-width:0;display:flex;flex-direction:column;gap:3px}
+.mp-cell .lb{font-family:var(--mp-mono);font-size:10.5px;color:var(--mp-muted);display:flex;justify-content:space-between}
+.mp-cell .it{font-size:11.5px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mp-cell .it em{font-style:normal;font-family:var(--mp-mono);font-size:10.5px;color:var(--mp-muted)}
+.mp-cell .it.z{color:var(--mp-zero)}
+.mp-cell .more{font-size:11px;color:var(--mp-upright);font-weight:600}
+.mp-cell.empty{border-top-color:var(--mp-line);opacity:.55;cursor:default}
+.mp-cell.hit{outline:3px solid var(--mp-hit);outline-offset:1px;background:var(--mp-surface)}
+.mp-cell[aria-pressed="true"]{border-color:var(--mp-upright);background:var(--mp-surface)}
+.mp-detail{background:var(--mp-surface);border:1px solid var(--mp-line);border-left:6px solid var(--mp-beam);border-radius:4px;padding:10px 12px}
+.mp-detail h3{margin:0 0 6px;font-family:var(--mp-mono);font-weight:500;font-size:15px}
+.mp-detail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.mp-detail li{display:grid;grid-template-columns:64px 1fr auto;gap:8px;padding:6px 0;border-top:1px solid var(--mp-line);font-size:13px;align-items:baseline}
+.mp-detail li .c{font-family:var(--mp-mono);color:var(--mp-muted);font-size:12px}
+.mp-detail li .s{font-family:var(--mp-mono);font-size:12px}
+.mp-detail li.z .s{color:var(--mp-zero)}
+.mp-note{color:var(--mp-muted);font-size:12px;margin:0}
+#section-mapa button:focus-visible,#section-mapa input:focus-visible{outline:3px solid var(--mp-hit);outline-offset:2px}
 .indic-card .indic-num{font-size:30px;font-weight:800;line-height:1}
 .indic-card .indic-label{font-size:11px;font-weight:600;letter-spacing:.03em;margin-top:6px;text-transform:uppercase;opacity:.9}
 .indic-red{background:#2a0a0a;border:1px solid #f85149;color:#f85149}
@@ -543,6 +582,7 @@ body.locked #section-produccion{display:none!important}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.0/JsBarcode.all.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap">
 </head>
 <body>
 
@@ -3016,33 +3056,28 @@ function nuevoProductoSave() {
 
 <!-- ===== SECCIÓN MAPA VIRTUAL ===== -->
 <div id="section-mapa" style="display:none">
-  <div class="mod-wrap">
-
-    <div class="mod-card">
-      <div class="mod-step-label">🏗️ Mapa Virtual de Rack</div>
-      <div class="mod-step-desc">Visualiza los niveles de un rack, como se ven en bodega</div>
-
-      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        <button class="mod-type-btn" id="mapa-btn-f" onclick="setMapaZona('F')">F</button>
-        <button class="mod-type-btn" id="mapa-btn-fv" onclick="setMapaZona('FV')">Fv</button>
-        <button class="mod-type-btn" id="mapa-btn-pb" onclick="setMapaZona('PB')">Pb</button>
-        <button class="mod-type-btn active" id="mapa-btn-va" onclick="setMapaZona('VA')">Va</button>
-        <button class="mod-type-btn" id="mapa-btn-vz" onclick="setMapaZona('VZ')">Vz</button>
-      </div>
-
-      <div style="margin-top:12px">
-        <div class="mod-step-desc" style="margin-bottom:6px">Calle</div>
-        <select id="mapa-calle-select" onchange="renderMapaVirtual()" style="width:100%;padding:10px 12px;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;font-family:inherit;font-size:13px"></select>
-      </div>
+  <div class="mod-wrap mp-root">
+    <header>
+      <h1 class="mp-h1">Mapa de bodega</h1>
+      <p class="mp-sub" id="mp-meta"></p>
+    </header>
+    <div class="mp-tabs mp-zonas" id="mp-zonas" role="group" aria-label="Zona"></div>
+    <div class="mp-tabs mp-secs" id="mp-secs" role="group" aria-label="Calle y lado"></div>
+    <div class="mp-search">
+      <input id="mp-q" type="search" placeholder="Buscar código o descripción" autocomplete="off" aria-label="Buscar producto en el mapa">
+      <button id="mp-clr" type="button">Limpiar</button>
     </div>
-
-    <div id="mapa-rack-container" style="margin-top:12px"></div>
-
-    <div class="mod-card" id="mapa-detalle-card" style="display:none;margin-top:12px">
-      <div class="mod-step-label" id="mapa-detalle-titulo">Nivel</div>
-      <div id="mapa-detalle-lista" style="display:flex;flex-direction:column;gap:6px;margin-top:10px"></div>
+    <div class="mp-res" id="mp-res" hidden></div>
+    <div>
+      <h2 class="mp-sec-title" id="mp-filas-title"></h2>
+      <div class="mp-filas" id="mp-filas" style="margin-top:8px"></div>
     </div>
-
+    <div>
+      <h2 class="mp-sec-title" id="mp-rack-title"></h2>
+      <div class="mp-rack" style="margin-top:8px"><div class="mp-grid" id="mp-grid"></div></div>
+    </div>
+    <div class="mp-detail" id="mp-detail" hidden></div>
+    <p class="mp-note">Altura 1 es la más baja. Cada ubicación es Zona-Calle-Lado-Fila-Altura-Departamento (ej. PB-02-01-03-04-D). El color de las filas muestra cuántos productos tienen. Los datos se leen en vivo de la app.</p>
   </div>
 </div><!-- /section-mapa -->
 
@@ -5018,147 +5053,163 @@ function getRotacionData() {
   return stored;
 }
 
-// ===== MAPA VIRTUAL DE RACK =====
-let _mapaZonaActual = 'VA';
-
+// ===== MAPA DE BODEGA (rack visto de frente, datos en vivo de DATA) =====
 function parseUbicParts(u) {
   const parts = u.split('-');
   if (parts.length < 6) return null;
   return { zona: parts[0].toUpperCase(), calle: parts[1], lado: parts[2], fila: parts[3], altura: parts[4], dep: parts[5], prof: parts[6]||'01' };
 }
 
-function setMapaZona(zona) {
-  _mapaZonaActual = zona;
-  const botones = { F:'mapa-btn-f', FV:'mapa-btn-fv', PB:'mapa-btn-pb', VA:'mapa-btn-va', VZ:'mapa-btn-vz' };
-  Object.keys(botones).forEach(z => {
-    document.getElementById(botones[z]).classList.toggle('active', zona===z);
-  });
-  document.getElementById('mapa-detalle-card').style.display = 'none';
-  renderMapaCalleOptions();
-  renderMapaVirtual();
-}
+const MP_ZONAS = [['F','F'],['FV','Fv'],['PB','Pb'],['VA','Va'],['VZ','Vz']];
+let mp = { zona:'PB', sec:null, fila:null, cell:null, hits:new Set() };
+let mpIdx = null;      // zona -> 'calle-lado' -> fila(int) -> 'alt-dep' -> [{cod,desc,stock}]
+let mpFlat = [];       // para búsqueda
+const mpEsc = t => String(t==null?'':t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const mpNorm = t => String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
 
-function renderMapaCalleOptions() {
-  const select = document.getElementById('mapa-calle-select');
-  const calles = new Set();
+function mpBuild() {
+  mpIdx = {}; mpFlat = [];
   DATA.forEach(p => {
+    const seen = new Set();
     (p.ubic||'').split(',').forEach(u => {
-      const info = parseUbicParts(u.trim());
-      if (info && info.zona === _mapaZonaActual) calles.add(info.calle);
+      u = u.trim().toUpperCase();
+      const i = parseUbicParts(u);
+      if (!i || seen.has(u)) return;
+      seen.add(u);
+      const sec = i.calle + '-' + i.lado, fila = parseInt(i.fila,10), cell = i.altura + '-' + i.dep;
+      const z = (mpIdx[i.zona] = mpIdx[i.zona] || {});
+      const sc = (z[sec] = z[sec] || {});
+      const fl = (sc[fila] = sc[fila] || {});
+      (fl[cell] = fl[cell] || []).push({ cod: p.cod, desc: p.desc, stock: p.stock||0 });
+      mpFlat.push({ zona: i.zona, sec, fila, cell, ubic: u, cod: p.cod, desc: p.desc, n: mpNorm(p.cod + ' ' + p.desc) });
     });
   });
-  const callesArr = Array.from(calles).sort();
-  select.innerHTML = callesArr.map(c => `<option value="${c}">Calle ${c}</option>`).join('');
 }
-
+function mpSecs(zona) { return Object.keys(mpIdx[zona]||{}).sort(); }
+function mpSecLabel(zona, sec) {
+  const [c, l] = sec.split('-');
+  let sub = 'Lado ' + l;
+  if (zona === 'PB' || zona === 'FV' || zona === 'F') sub = (zona === 'PB' && l === '02') ? 'Cajones · lado 02' : 'Rack · lado ' + l;
+  return { t: 'Calle ' + c, s: sub };
+}
+function mpFilaTotal(zona, sec, f) {
+  const fl = mpIdx[zona][sec][f]; let n = 0;
+  Object.keys(fl).forEach(k => n += fl[k].length); return n;
+}
+function mpEnsure() {
+  if (!mpIdx[mp.zona]) { const z = MP_ZONAS.find(z => mpIdx[z[0]]); mp.zona = z ? z[0] : 'PB'; }
+  const secs = mpSecs(mp.zona);
+  if (!secs.includes(mp.sec)) { mp.sec = secs[0] || null; mp.fila = null; mp.cell = null; }
+  if (mp.sec) {
+    const fs = Object.keys(mpIdx[mp.zona][mp.sec]).map(Number).sort((a,b)=>a-b);
+    if (!fs.includes(mp.fila)) { mp.fila = fs[0]; mp.cell = null; }
+  }
+}
+function mpRenderTabs() {
+  document.getElementById('mp-zonas').innerHTML = MP_ZONAS.map(([k, lbl]) => {
+    let n = 0; Object.values(mpIdx[k]||{}).forEach(sc => Object.values(sc).forEach(fl => Object.values(fl).forEach(a => n += a.length)));
+    return `<button class="mp-tab" type="button" data-z="${k}" aria-pressed="${k===mp.zona}">${lbl}<small>${n} prod.</small></button>`;
+  }).join('');
+  document.getElementById('mp-secs').innerHTML = mpSecs(mp.zona).map(sec => {
+    const l = mpSecLabel(mp.zona, sec);
+    return `<button class="mp-tab" type="button" data-s="${sec}" aria-pressed="${sec===mp.sec}">${mp.zona === 'FV' ? 'FV' : MP_ZONAS.find(z=>z[0]===mp.zona)[1]}-${sec.split('-')[0]}<small>${l.s}</small></button>`;
+  }).join('');
+}
+function mpRenderFilas() {
+  const t = document.getElementById('mp-filas-title'), box = document.getElementById('mp-filas');
+  if (!mp.sec) { t.textContent = 'Sin ubicaciones'; box.innerHTML = ''; return; }
+  const sc = mpIdx[mp.zona][mp.sec], fs = Object.keys(sc).map(Number).sort((a,b)=>a-b);
+  const tot = fs.map(f => mpFilaTotal(mp.zona, mp.sec, f)), max = Math.max(...tot, 1);
+  const l = mpSecLabel(mp.zona, mp.sec);
+  t.innerHTML = `${mp.zona}-${mp.sec.split('-')[0]} · ${l.s}<span>${fs.length} filas · elige una</span>`;
+  box.innerHTML = fs.map((f, i) => {
+    const n = tot[i], r = n / max, h = r > .75 ? 3 : r > .5 ? 2 : r > .25 ? 1 : 0;
+    return `<button class="mp-fila" type="button" data-f="${f}" data-h="${h}" aria-pressed="${f===mp.fila}"><b>${String(f).padStart(2,'0')}</b><i>${n} prod.</i></button>`;
+  }).join('');
+}
+function mpRenderGrid() {
+  const title = document.getElementById('mp-rack-title'), grid = document.getElementById('mp-grid');
+  if (!mp.sec) { title.textContent = ''; grid.innerHTML = ''; return; }
+  const sc = mpIdx[mp.zona][mp.sec], fl = sc[mp.fila] || {};
+  // alturas y departamentos de toda la sección (para que la vista sea consistente entre filas)
+  const alts = new Set(), deps = new Set();
+  Object.values(sc).forEach(f => Object.keys(f).forEach(k => { const [a, d] = k.split('-'); alts.add(a); deps.add(d); }));
+  const A = Array.from(alts).sort().reverse(), D = Array.from(deps).sort();
+  const fs = String(mp.fila).padStart(2,'0');
+  title.innerHTML = `Fila ${fs}<span>vista de frente · altura 1 abajo</span>`;
+  grid.style.gridTemplateColumns = `34px repeat(${D.length}, minmax(${D.length===1?'0':'112px'}, 1fr))`;
+  let h = '<div></div>' + D.map(d => `<div class="mp-hd">${d}</div>`).join('');
+  A.forEach(a => {
+    h += `<div class="mp-alt">${parseInt(a,10)}</div>`;
+    D.forEach(d => {
+      const k = a + '-' + d, it = (fl[k] || []).slice().sort((x,y) => String(x.cod).localeCompare(String(y.cod)));
+      const full = `${mp.sec}-${fs}-${k}`;
+      const cls = ['mp-cell']; if (!it.length) cls.push('empty'); if (mp.hits.has(mp.zona + '|' + full)) cls.push('hit');
+      const body = it.length ? it.slice(0,2).map(p => `<div class="it${p.stock===0?' z':''}"><em>${mpEsc(p.cod)}</em> ${mpEsc(p.desc)}</div>`).join('') + (it.length>2 ? `<div class="more">+${it.length-2} más</div>` : '') : '';
+      h += `<button class="${cls.join(' ')}" type="button" data-k="${k}" aria-pressed="${mp.cell===k}" ${it.length?'':'disabled'}><div class="lb"><span>${d}-${a}</span><span>${it.length||''}</span></div>${body}</button>`;
+    });
+  });
+  grid.innerHTML = h;
+}
+function mpRenderDetail() {
+  const el = document.getElementById('mp-detail');
+  if (!mp.sec || !mp.cell) { el.hidden = true; return; }
+  const it = ((mpIdx[mp.zona][mp.sec][mp.fila] || {})[mp.cell] || []).slice().sort((x,y) => String(x.cod).localeCompare(String(y.cod)));
+  if (!it.length) { el.hidden = true; return; }
+  const full = `${mp.zona}-${mp.sec}-${String(mp.fila).padStart(2,'0')}-${mp.cell}`;
+  el.hidden = false;
+  el.innerHTML = `<h3>${full} · ${it.length} producto${it.length!==1?'s':''}</h3><ul>` + it.map(p => `<li class="${p.stock===0?'z':''}"><span class="c">${mpEsc(p.cod)}</span><span>${mpEsc(p.desc)}</span><span class="s">${(p.stock||0).toLocaleString('es-CL')} un.</span></li>`).join('') + '</ul>';
+}
+function mpRenderAll() {
+  mpEnsure(); mpRenderTabs(); mpRenderFilas(); mpRenderGrid(); mpRenderDetail();
+}
+function mpSearch() {
+  const q = document.getElementById('mp-q'), res = document.getElementById('mp-res');
+  const v = mpNorm(q.value.trim()); mp.hits = new Set();
+  if (v.length < 2) { res.hidden = true; mpRenderGrid(); return; }
+  const toks = v.split(/\s+/), m = mpFlat.filter(x => toks.every(t => x.n.includes(t)));
+  m.forEach(x => mp.hits.add(x.zona + '|' + x.sec + '-' + String(x.fila).padStart(2,'0') + '-' + x.cell));
+  res.hidden = false;
+  res.innerHTML = m.length
+    ? m.slice(0,60).map((x, i) => `<button type="button" data-i="${i}"><span class="c">${mpEsc(x.cod)}</span><span>${mpEsc(x.desc)}</span><span class="l">${x.ubic}</span></button>`).join('') + (m.length>60 ? `<div style="padding:8px 10px;font-size:12px;color:var(--mp-muted)">Mostrando 60 de ${m.length}. Afina la búsqueda.</div>` : '')
+    : '<div style="padding:10px;font-size:12px;color:var(--mp-muted)">Sin resultados</div>';
+  res._m = m;
+  mpRenderGrid();
+}
 function renderMapaVirtual() {
-  const container = document.getElementById('mapa-rack-container');
-  const calleSel = document.getElementById('mapa-calle-select');
-  if (!calleSel.options.length) renderMapaCalleOptions();
-  const calle = calleSel.value;
-  if (!calle) { container.innerHTML = ''; return; }
-
-  // Agrupar por nivel (altura), y dentro de cada nivel juntar productos únicos
-  const porAltura = {};
-  const seenPorAltura = {};
-  DATA.forEach(p => {
-    (p.ubic||'').split(',').forEach(u => {
-      u = u.trim();
-      const info = parseUbicParts(u);
-      if (!info || info.zona !== _mapaZonaActual || info.calle !== calle) return;
-      if (!porAltura[info.altura]) { porAltura[info.altura] = []; seenPorAltura[info.altura] = new Set(); }
-      const key = u.toUpperCase() + '|' + p.cod;
-      if (seenPorAltura[info.altura].has(key)) return;
-      seenPorAltura[info.altura].add(key);
-      porAltura[info.altura].push({ ubic: u.toUpperCase(), cod: p.cod, desc: p.desc, stock: p.stock||0 });
-    });
-  });
-
-  const alturasConProductos = Object.keys(porAltura).sort();
-
-  // Vz siempre muestra los 4 niveles (01-04), aunque alguno esté vacío
-  const NIVELES_FIJOS = { VZ: ['01','02','03','04'] };
-  const alturasOrdenadas = NIVELES_FIJOS[_mapaZonaActual] || alturasConProductos;
-
-  if (!alturasConProductos.length && !NIVELES_FIJOS[_mapaZonaActual]) {
-    container.innerHTML = `<div class="mod-card" style="text-align:center;color:#484f58;padding:24px">Sin productos registrados en ${_mapaZonaActual}-${calle}</div>`;
-    return;
-  }
-
-  container.innerHTML = `
-    <div class="mod-card">
-      <div class="mod-step-label">${_mapaZonaActual}-${calle} — ${alturasOrdenadas.length} nivel${alturasOrdenadas.length!==1?'es':''}</div>
-      <div class="rack-frame" style="margin-top:12px">
-        ${alturasOrdenadas.map(alt => {
-          const items = porAltura[alt] || [];
-          const cajas = Math.min(items.length, 6);
-          const vacio = items.length === 0;
-          if (vacio) {
-            return `
-              <div class="rack-level" onclick="mostrarMapaDetalle('${_mapaZonaActual}','${calle}','${alt}')">
-                <div class="rack-level-label">${_mapaZonaActual}-${alt}</div>
-                <div class="rack-level-shelf empty">
-                  <div class="rack-level-beam"></div>
-                  <div class="rack-level-empty-txt">Sin productos registrados</div>
-                </div>
-              </div>
-            `;
-          }
-          return `
-            <div class="rack-level" onclick="mostrarMapaDetalle('${_mapaZonaActual}','${calle}','${alt}')">
-              <div class="rack-level-label">${_mapaZonaActual}-${alt}</div>
-              <div class="rack-level-shelf filled">
-                <div class="rack-level-beam"></div>
-                <div class="rack-level-inner">
-                  <div class="rack-level-count">${items.length}</div>
-                  ${Array.from({length: cajas}).map(() => '<div class="rack-box">📦</div>').join('')}
-                </div>
-              </div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-      <div class="mod-step-desc" style="margin-top:10px;text-align:center">Toca un nivel para ver el detalle de productos</div>
-    </div>
-  `;
+  mpBuild();
+  const total = new Set(mpFlat.map(x => x.cod)).size, ubics = new Set(mpFlat.map(x => x.ubic)).size;
+  document.getElementById('mp-meta').textContent = `${ubics} ubicaciones ocupadas · ${total} productos ubicados · datos en vivo`;
+  mpRenderAll();
+  if (document.getElementById('mp-q').value) mpSearch();
 }
-
-function mostrarMapaDetalle(zona, calle, altura) {
-  const items = [];
-  const seen = new Set();
-  DATA.forEach(p => {
-    (p.ubic||'').split(',').forEach(u => {
-      u = u.trim();
-      const info = parseUbicParts(u);
-      if (!info || info.zona !== zona || info.calle !== calle || info.altura !== altura) return;
-      const key = u.toUpperCase() + '|' + p.cod;
-      if (seen.has(key)) return;
-      seen.add(key);
-      items.push({ ubic: u.toUpperCase(), cod: p.cod, desc: p.desc, stock: p.stock||0 });
-    });
+(function mpInit() {
+  document.getElementById('mp-zonas').addEventListener('click', e => {
+    const b = e.target.closest('.mp-tab'); if (!b) return;
+    mp.zona = b.dataset.z; mp.sec = null; mp.fila = null; mp.cell = null; mpRenderAll();
   });
-
-  const card = document.getElementById('mapa-detalle-card');
-  document.getElementById('mapa-detalle-titulo').textContent = `${zona}-${calle} · Nivel ${zona}-${altura} — ${items.length} producto${items.length!==1?'s':''}`;
-
-  if (!items.length) {
-    document.getElementById('mapa-detalle-lista').innerHTML = `<div style="text-align:center;color:#484f58;padding:16px;font-size:13px">Este nivel aún no tiene productos registrados.</div>`;
-    card.style.display = 'block';
-    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    return;
-  }
-
-  document.getElementById('mapa-detalle-lista').innerHTML = items.sort((a,b) => a.ubic.localeCompare(b.ubic)).map(it => `
-    <div class="hist-item">
-      <div class="hist-item-name">${it.ubic}</div>
-      <div class="hist-item-sub">Código: <b style="color:#e6edf3">${it.cod}</b> · ${it.desc}</div>
-      <div class="hist-item-user">📦 Stock: ${it.stock.toLocaleString('es-CL')}</div>
-    </div>
-  `).join('');
-
-  card.style.display = 'block';
-  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
+  document.getElementById('mp-secs').addEventListener('click', e => {
+    const b = e.target.closest('.mp-tab'); if (!b) return;
+    mp.sec = b.dataset.s; mp.fila = null; mp.cell = null; mpRenderAll();
+  });
+  document.getElementById('mp-filas').addEventListener('click', e => {
+    const b = e.target.closest('.mp-fila'); if (!b) return;
+    mp.fila = +b.dataset.f; mp.cell = null; mpRenderFilas(); mpRenderGrid(); mpRenderDetail();
+  });
+  document.getElementById('mp-grid').addEventListener('click', e => {
+    const b = e.target.closest('.mp-cell'); if (!b || b.disabled) return;
+    mp.cell = mp.cell === b.dataset.k ? null : b.dataset.k; mpRenderGrid(); mpRenderDetail();
+    if (mp.cell) document.getElementById('mp-detail').scrollIntoView({ block:'nearest', behavior:'smooth' });
+  });
+  document.getElementById('mp-q').addEventListener('input', mpSearch);
+  document.getElementById('mp-clr').addEventListener('click', () => { document.getElementById('mp-q').value = ''; mpSearch(); });
+  document.getElementById('mp-res').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const x = document.getElementById('mp-res')._m[+b.dataset.i]; if (!x) return;
+    mp.zona = x.zona; mp.sec = x.sec; mp.fila = x.fila; mp.cell = x.cell; mpRenderAll();
+    document.getElementById('mp-grid').scrollIntoView({ block:'center', behavior:'smooth' });
+  });
+})();
 
 function renderRotacion() {
   const mesInput = document.getElementById('rotacion-mes-select');
