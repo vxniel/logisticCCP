@@ -1305,6 +1305,13 @@ body.locked #section-produccion{display:none!important}
           <label style="font-size:11px;color:#7d8590;display:flex;flex-direction:column;gap:3px">Hora
             <input type="time" id="hist-to-t" value="23:59" onchange="histRangeChanged()" style="background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:7px 8px;font-size:13px"/></label>
         </div>
+        <div style="margin-top:10px">
+          <div style="font-size:11px;color:#7d8590;margin-bottom:4px">Qué exportar</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:#e6edf3">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="hist-kind" value="mod" checked onchange="histRangeChanged()"> Modificaciones (ubicación)</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="hist-kind" value="stock" onchange="histRangeChanged()"> Stock</label>
+          </div>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
           <button class="mod-back-btn" onclick="histRangePreset('hoy')">Hoy</button>
           <button class="mod-back-btn" onclick="histRangePreset('manana')">Hoy mañana</button>
@@ -2451,10 +2458,14 @@ function histGetRange() {
   const hasta = tv ? new Date(tv + 'T' + tt + ':59.999') : null;
   return { desde, hasta, fv, tv, ft, tt };
 }
+function histKind() { const r = document.querySelector('input[name="hist-kind"]:checked'); return r ? r.value : 'mod'; }
+function histEsStock(h) { return /stock/i.test(h.tipo || ''); }
 function histFilteredEntries() {
   const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
   const { desde, hasta } = histGetRange();
+  const kind = histKind();
   const out = hist.map(h => ({ h, d: histParseTs(h) })).filter(x => {
+    if (kind === 'stock' ? !histEsStock(x.h) : histEsStock(x.h)) return false;   // Modificaciones NO incluye stock
     if (!desde && !hasta) return true;
     if (!x.d) return false;
     if (desde && x.d < desde) return false;
@@ -2481,12 +2492,20 @@ function histRangeChanged() {
   const { desde, hasta } = histGetRange();
   if (desde && hasta && desde > hasta) { if (info) info.innerHTML = '<span style="color:#f85149">⚠️ "Desde" no puede ser posterior a "Hasta"</span>'; return; }
   const n = histFilteredEntries().length;
-  if (info) info.textContent = `${n} movimiento${n===1?'':'s'} en el rango (${histRangeLabel()})`;
+  if (info) info.textContent = `${n} ${histKind()==='stock' ? 'ajuste' : 'movimiento'}${n===1?'':'s'} de ${histKind()==='stock' ? 'stock' : 'ubicación'} en el rango (${histRangeLabel()})`;
 }
 
 function getHistoryRows() {
-  const hist = histFilteredEntries();
-  return hist.map(h => ({
+  const hist = histFilteredEntries(), stock = histKind() === 'stock';
+  return hist.map(h => stock ? {
+    Fecha: h.ts || '',
+    Tipo: histTipoExport(h),
+    Codigo: h.cod || '',
+    Producto: h.desc || '',
+    'Stock anterior': h.de != null ? String(h.de) : '',
+    'Stock nuevo': h.a != null ? String(h.a) : '',
+    Usuario: h.user || ''
+  } : {
     Fecha: h.ts || '',
     'Ubicación': histTipoExport(h),
     Codigo: h.cod || '',
@@ -2494,11 +2513,21 @@ function getHistoryRows() {
     De: h.de || h.oldUbic || '',
     A: h.a || h.newUbic || '',
     Usuario: h.user || ''
-  }));
+  });
+}
+function histExportMeta() {
+  const stock = histKind() === 'stock';
+  return stock
+    ? { nombre: 'Stock', titulo: 'Historial de Stock — DCCP', head: ['Fecha','Tipo','Código','Producto','Stock anterior','Stock nuevo','Usuario'], vals: r => [r.Fecha, r.Tipo, r.Codigo, r.Producto, r['Stock anterior'], r['Stock nuevo'], r.Usuario], stock }
+    : { nombre: 'Modificaciones', titulo: 'Historial de Modificaciones — DCCP', head: ['Fecha','Ubicación','Código','Producto','De','A','Usuario'], vals: r => [r.Fecha, r['Ubicación'], r.Codigo, r.Producto, r.De, r.A, r.Usuario], stock };
 }
 
 // Resumen: códigos distintos modificados por zona + total
 function histResumen(rows) {
+  if (histKind() === 'stock') {
+    const cods = new Set(rows.map(r => r.Codigo));
+    return [['TOTAL códigos con stock modificado', cods.size], ['Total movimientos registrados', rows.length]];
+  }
   const ORDER = ['Pb','Fv','F','Va','Vz'];
   const por = {}, todos = new Set();
   rows.forEach(r => {
@@ -2521,6 +2550,7 @@ function exportHistoryExcel() {
   if (_r.desde && _r.hasta && _r.desde > _r.hasta) { alert('El rango de fechas no es válido: "Desde" es posterior a "Hasta".'); return; }
   const rows = getHistoryRows();
   if(!rows.length) { alert('No hay modificaciones en el rango seleccionado (' + histRangeLabel() + ').'); return; }
+  const _m = histExportMeta();
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [{wch:20},{wch:14},{wch:10},{wch:45},{wch:22},{wch:22},{wch:14}];
   // Marca de agua al pie de la hoja
@@ -2529,10 +2559,10 @@ function exportHistoryExcel() {
   XLSX.utils.sheet_add_aoa(ws, [['Resumen de códigos modificados',''], ...resumen], { origin: `A${lastRow}` });
   XLSX.utils.sheet_add_aoa(ws, [['By: Vxniel']], { origin: `A${lastRow + resumen.length + 2}` });
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Historial');
+  XLSX.utils.book_append_sheet(wb, ws, _m.stock ? 'Stock' : 'Historial');
   const now = new Date();
   const fecha = String(now.getDate()).padStart(2,'0') + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + now.getFullYear();
-  XLSX.writeFile(wb, `Modificaciones(${histRangeLabel().replace(/:/g,'-').replace(/ (al|a) /g,'_$1_').replace(/\s+/g,'_')}).xlsx`);
+  XLSX.writeFile(wb, `${_m.nombre}(${histRangeLabel().replace(/:/g,'-').replace(/ (al|a) /g,'_$1_').replace(/\s+/g,'_')}).xlsx`);
 }
 
 function exportHistoryPDF() {
@@ -2543,7 +2573,8 @@ function exportHistoryPDF() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   doc.setFontSize(14);
-  doc.text('Historial de Modificaciones — DCCP', 30, 24);
+  const _m = histExportMeta();
+  doc.text(_m.titulo, 30, 24);
   doc.setFontSize(9);
   doc.text('Generado: ' + getOfficialNow().toLocaleString('es-CL') + '  ·  Período: ' + histRangeLabel(), 30, 40);
 
@@ -2557,8 +2588,8 @@ function exportHistoryPDF() {
 
   doc.autoTable({
     startY: 50,
-    head: [['Fecha','Ubicación','Código','Producto','De','A','Usuario']],
-    body: rows.map(r => [shortDate(r.Fecha), r['Ubicación'], r.Codigo, r.Producto, r.De, r.A, r.Usuario]),
+    head: [_m.head],
+    body: rows.map(r => { const v = _m.vals(r); v[0] = shortDate(v[0]); return v; }),
     styles: { fontSize: 7.5, cellPadding: 4, valign: 'middle', overflow: 'linebreak' },
     headStyles: { fillColor: [31, 56, 84], fontSize: 8, halign: 'center' },
     bodyStyles: { minCellHeight: 14 },
@@ -2582,7 +2613,7 @@ function exportHistoryPDF() {
   doc.text('Resumen de códigos modificados', 30, yR);
   doc.autoTable({
     startY: yR + 6,
-    head: [['Ubicación','Códigos']],
+    head: [[_m.stock ? 'Resumen' : 'Ubicación','Códigos']],
     body: resumen.map(([k,v]) => [k, String(v)]),
     styles: { fontSize: 8.5, cellPadding: 4 },
     headStyles: { fillColor: [31, 56, 84], halign: 'center' },
@@ -2604,7 +2635,7 @@ function exportHistoryPDF() {
 
   const now = new Date();
   const fecha = String(now.getDate()).padStart(2,'0') + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + now.getFullYear();
-  doc.save(`Modificaciones(${histRangeLabel().replace(/:/g,'-').replace(/ (al|a) /g,'_$1_').replace(/\s+/g,'_')}).pdf`);
+  doc.save(`${_m.nombre}(${histRangeLabel().replace(/:/g,'-').replace(/ (al|a) /g,'_$1_').replace(/\s+/g,'_')}).pdf`);
 }
 
 // ── mod scanner ──
