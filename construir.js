@@ -10,7 +10,7 @@ html = html.replace(/<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/g, (m, a
   if (!code.trim()) return m;
   const out = babel.transformSync(code, {
     sourceType: 'script', compact: true, comments: false, babelrc: false, configFile: false,
-    presets: [[require.resolve('@babel/preset-env'), { targets: { chrome: '55' }, modules: false }]]
+    presets: [[require.resolve('@babel/preset-env'), { targets: { chrome: '40' }, modules: false }]]
   }).code;
   n++;
   return '<script' + attrs + '>' + out.replace(/<\/script/gi, '<\\/script') + '</script>';
