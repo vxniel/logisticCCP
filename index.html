@@ -7965,6 +7965,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   const NUM = {cero:'0',uno:'1',un:'1',una:'1',dos:'2',tres:'3',cuatro:'4',cinco:'5',seis:'6',siete:'7',ocho:'8',nueve:'9'};
   const norm = t => String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[¿?¡!,;:]/g,' ').replace(/\s+/g,' ').trim();
 
+  let pendienteManual=null, abortarEscucha=null;
   let corriendo=false, prod=null, ultimoTexto='', rec=null, vozES=null, cancelar=false, tokenSes=0;
 
   function log(quien, txt){
@@ -8004,8 +8005,9 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     return new Promise(res=>{
       if(!SR){ res({error:'nosr'}); return; }
       let listo=false, alts=[];
-      const fin=v=>{ if(listo) return; listo=true; clearTimeout(tm); try{rec.onend=null;rec.stop();}catch(e){} res(v); };
+      const fin=v=>{ if(listo) return; listo=true; abortarEscucha=null; clearTimeout(tm); try{rec.onend=null;rec.stop();}catch(e){} res(v); };
       try{
+        abortarEscucha=()=>fin({manual:true});
         rec=new SR(); rec.lang='es-CL'; rec.continuous=false; rec.interimResults=false; rec.maxAlternatives=4;
         rec.onresult=e=>{ const r=e.results[e.results.length-1]; for(let i=0;i<r.length;i++) alts.push(r[i].transcript); fin({alts}); };
         rec.onerror=e=>{ fin({error:e.error||'error'}); };
@@ -8062,15 +8064,15 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   function pintarZonas(){
     zonasEl.innerHTML='';
     if(modo==='conf'){
-      const ok=document.createElement('button'); ok.type='button'; ok.textContent='✅ Confirmar'; ok.onclick=()=>procesar(['sí'],true);
-      const no=document.createElement('button'); no.type='button'; no.textContent='❌ Cancelar'; no.onclick=()=>procesar(['cancelar'],true);
+      const ok=document.createElement('button'); ok.type='button'; ok.textContent='✅ Confirmar'; ok.onclick=()=>entrada(['sí']);
+      const no=document.createElement('button'); no.type='button'; no.textContent='❌ Cancelar'; no.onclick=()=>entrada(['cancelar']);
       zonasEl.appendChild(ok); zonasEl.appendChild(no); return;
     }
     if(!prod) return;
     const m=zonasDe(prod), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
-    zs.forEach(z=>{ const b=document.createElement('button'); b.type='button'; b.textContent=(ZONA_HABLADA[z]||z)+' ('+z+')'; b.onclick=()=>procesar([ZONA_HABLADA[z]||z],true); zonasEl.appendChild(b); });
-    const tb=document.createElement('button'); tb.type='button'; tb.textContent='🧭 Trazabilidad'; tb.onclick=()=>procesar(['trazabilidad'],true); zonasEl.appendChild(tb);
-    const mb=document.createElement('button'); mb.type='button'; mb.textContent='✏️ Mover ubicación'; mb.onclick=()=>procesar(['mover ubicación'],true); zonasEl.appendChild(mb);
+    zs.forEach(z=>{ const b=document.createElement('button'); b.type='button'; b.textContent=(ZONA_HABLADA[z]||z)+' ('+z+')'; b.onclick=()=>entrada([ZONA_HABLADA[z]||z]); zonasEl.appendChild(b); });
+    const tb=document.createElement('button'); tb.type='button'; tb.textContent='🧭 Trazabilidad'; tb.onclick=()=>entrada(['trazabilidad']); zonasEl.appendChild(tb);
+    const mb=document.createElement('button'); mb.type='button'; mb.textContent='✏️ Mover ubicación'; mb.onclick=()=>entrada(['mover ubicación']); zonasEl.appendChild(mb);
   }
 
   let pag=null;   // {z, lista, idx}: para zonas con muchas ubicaciones (se leen de a 5)
@@ -8200,8 +8202,16 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     }
     return null;
   }
+  // Etiqueta de ubicación leída con el lector: "PB-02-01-13-04-D-01" (también sin guiones o con otros separadores)
+  function ubicEscaneada(t){
+    const x=String(t||'').toUpperCase().trim().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'');
+    let m=x.match(/^(FV|PB|VA|VZ|F)-(\d{2})-(\d{2})-(\d{2})-(\d{2})-([A-D])(?:-(\d{2}))?$/);
+    if(!m){ const k=x.replace(/-/g,''); m=k.match(/^(FV|PB|VA|VZ|F)(\d{2})(\d{2})(\d{2})(\d{2})([A-D])(\d{2})?$/); }
+    return m ? [m[1],m[2],m[3],m[4],m[5],m[6],m[7]||'01'].join('-') : null;
+  }
   const dime='Dime calle, lado, fila, altura y letra. Por ejemplo: calle 5, lado 1, fila 28, altura 1, letra A.';
-  function mvLimpiar(){ modo=null; mv=null; pintarZonas(); }
+  function esperarEscaneo(on){ try{ if(on){ inEl.inputMode='none'; inEl.placeholder='Escanea la ubicación nueva…'; inEl.focus(); } else { inEl.inputMode='numeric'; inEl.placeholder='Escribe un código...'; } }catch(e){} }
+  function mvLimpiar(){ modo=null; mv=null; esperarEscaneo(false); pintarZonas(); }
   async function mvIniciar(){
     if(!prod){ await hablar('Primero dime el código del producto.'); return; }
     if(!window._loggedUser){ await hablar('Necesito que hayas iniciado sesión para registrar el cambio.'); return; }
@@ -8214,7 +8224,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   }
   async function mvZona(z){
     const lista=zonasDe(prod)[z]||[]; mv.zona=z; mv.lista=lista; mv.pag=0;
-    if(lista.length===1){ mv.vieja=lista[0]; modo='nueva'; await hablar('Cambiar '+ubicHablada(mv.vieja)+'. ¿A qué ubicación la quieres mover? '+dime+' Si es otra zona, dila primero.'); return; }
+    if(lista.length===1){ mv.vieja=lista[0]; modo='nueva'; esperarEscaneo(true); await hablar('Cambiar '+ubicHablada(mv.vieja)+'. ¿A qué ubicación la quieres mover? Escanea la etiqueta de la ubicación nueva con el lector, o dímela. '+dime+' Si es otra zona, dila primero.'); return; }
     modo='num'; await mvListar();
   }
   async function mvListar(){
@@ -8224,8 +8234,8 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   }
   async function mvConfirmar(){
     const otros=DATA.filter(d=>d.cod!==mv.cod && String(d.ubic||'').split(',').some(u=>u.trim().toUpperCase()===mv.nueva)).length;
-    modo='conf'; pintarZonas();
-    await hablar('Confirmo: mover desde '+ubicHablada(mv.vieja)+', hacia '+ubicHablada(mv.nueva)+'. '+(otros?'Ojo: en esa ubicación ya hay '+otros+(otros===1?' producto. ':' productos. '):'')+'¿Confirmas? Di sí o no.');
+    modo='conf'; esperarEscaneo(false); pintarZonas();
+    await hablar('Confirmo: mover desde '+ubicHablada(mv.vieja)+', hacia '+ubicHablada(mv.nueva)+(mv.escaneada?' (ubicación escaneada)':'')+'. '+(otros?'Ojo: en esa ubicación ya hay '+otros+(otros===1?' producto. ':' productos. '):'')+'¿Confirmas? Di sí o no.');
   }
   async function mvAplicar(){
     const user=String(window._loggedUser||'').trim(), cod=mv.cod, vieja=mv.vieja, nueva=mv.nueva;
@@ -8258,14 +8268,15 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
       if(/\b(siguiente|mas|siguientes)\b/.test(todo) && (mv.pag+1)*POR_PAG<mv.lista.length){ mv.pag++; await mvListar(); return; }
       let n=null; for(const t of textos){ const r=numerosDe(t).nums; if(r.length){ n=r[0]; break; } }
       if(!n||n<1||n>mv.lista.length){ await hablar('No entendí el número. Dime un número entre 1 y '+mv.lista.length+'.'); return; }
-      mv.vieja=mv.lista[n-1]; modo='nueva';
-      await hablar('Cambiar '+ubicHablada(mv.vieja)+'. ¿A qué ubicación la quieres mover? '+dime+' Si es otra zona, dila primero.'); return;
+      mv.vieja=mv.lista[n-1]; modo='nueva'; esperarEscaneo(true);
+      await hablar('Cambiar '+ubicHablada(mv.vieja)+'. ¿A qué ubicación la quieres mover? Escanea la etiqueta de la ubicación nueva con el lector, o dímela. '+dime+' Si es otra zona, dila primero.'); return;
     }
     if(modo==='nueva'){
-      const r=interpretarUbic(textos, mv.vieja.split('-')[0].toUpperCase());
-      if(!r){ await hablar('No entendí la ubicación. '+dime); return; }
+      let esc=null; for(const t of textos){ esc=ubicEscaneada(t); if(esc) break; }
+      const r=esc?{ubic:esc,escaneada:true}:interpretarUbic(textos, mv.vieja.split('-')[0].toUpperCase());
+      if(!r){ await hablar('No entendí la ubicación. Escanea la etiqueta con el lector o '+dime.toLowerCase().replace('dime','dímela:').replace('dímela: calle','dímela con calle')); return; }
       if(r.ubic.toUpperCase()===mv.vieja.toUpperCase()){ await hablar('Esa es la misma ubicación que ya tiene. Dime otra distinta.'); return; }
-      mv.nueva=r.ubic; await mvConfirmar(); return;
+      mv.nueva=r.ubic; mv.escaneada=!!r.escaneada; await mvConfirmar(); return;
     }
     if(modo==='conf'){
       if(textos.some(t=>/\b(si|sí|confirmo|confirmado|confirmar|dale|ok|okey|correcto|de acuerdo|adelante)\b/.test(norm(t)))){ await mvAplicar(); return; }
@@ -8319,8 +8330,10 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     await hablar('Hola. Dime el código.');
     let fallos=0;
     while(corriendo && mi===tokenSes){
+      if(pendienteManual){ const t=pendienteManual; pendienteManual=null; await procesar(t,false); continue; }
       const r=await escuchar();
       if(!corriendo || mi!==tokenSes) break;
+      if(pendienteManual){ const t=pendienteManual; pendienteManual=null; await procesar(t,false); continue; }
       if(r.error==='nosr'){ log('bot','Este equipo no permite reconocer voz. Escribe el código abajo y te lo leo.'); break; }
       if(r.error==='not-allowed'||r.error==='service-not-allowed'){ log('bot','Falta permiso del micrófono. Actívalo en la configuración del navegador para este sitio.'); break; }
       if(!r.alts||!r.alts.length){
@@ -8339,10 +8352,12 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   fab.onclick=()=>{ panel.classList.add('open'); fab.style.display='none'; if(!logEl.children.length) log('bot','Toca "Hablar" y dime un código. También puedes escribirlo abajo.'); };
   $('voz-x').onclick=()=>{ detener(); panel.classList.remove('open'); fab.style.display=''; };
   micBtn.onclick=()=>{ corriendo ? detener() : sesion(); };
-  function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; procesar([v],true); }
+  // Texto escrito, escaneado (lector de la Zebra) o botones: si hay conversación activa, se atiende sin que el micrófono capte la voz del asistente
+  function entrada(t){ if(corriendo){ pendienteManual=t; if(abortarEscucha) abortarEscucha(); } else procesar(t,true); }
+  function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; entrada([v]); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = 'Versión 18-11 02:30 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
-  window.vozAsistente={procesar,sesion,detener,_estado:()=>({prod,corriendo})};
+  $('voz-nota').textContent = 'Versión 18-11 02:50 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
+  window.vozAsistente={procesar,sesion,detener,_escaneo:ubicEscaneada,_estado:()=>({prod,corriendo})};
 })();
 </script>
 
