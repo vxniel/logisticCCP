@@ -7925,13 +7925,13 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   const fab=$('voz-fab'), panel=$('voz-panel'), logEl=$('voz-log'), estEl=$('voz-estado'), zonasEl=$('voz-zonas'), inEl=$('voz-in'), micBtn=$('voz-mic');
 
   // Zona -> cómo se pronuncia, y sinónimos que reconoce el micrófono (incluye confusiones b/v)
-  const ZONA_HABLADA = { F:'efe', FV:'efe uve', PB:'pe be', VA:'uve a', VZ:'uve zeta' };
+  const ZONA_HABLADA = { F:'Flow', FV:'Flow Volumen', PB:'Picking Baja', VA:'Volumen', VZ:'Altura uve zeta' };
   const ZONA_SIN = {
-    FV:['fv','fb','efeuve','efeve','efebe','efuve','fuve','efeuvi'],
-    PB:['pb','pv','pebe','peve','pebe','peb','pev','pebes'],
-    VA:['va','ba','uvea','vea','bea','uvea','veah','vaa','bah'],
-    VZ:['vz','bz','uvezeta','vezeta','bezeta','uvezeda','vezzeta','ves'],
-    F:['f','efe','ef','fe','efes']
+    FV:['fv','fb','efeuve','efeve','efebe','efuve','flowvolumen','flouvolumen','flavolumen','flowvolumenes','flowyvolumen','flowdevolumen'],
+    PB:['pb','pv','pebe','peve','peb','pev','pickingbaja','pikingbaja','pickinbaja','pikinbaja','pickingbajo','pickin','picking','piking','baja'],
+    VA:['va','ba','uvea','vea','bea','volumen','volumenes','volumem','bolumen'],
+    VZ:['vz','bz','uvezeta','vezeta','bezeta','altura','alturavz','alturas','alturauvezeta','alturavezeta'],
+    F:['f','efe','ef','fe','flow','flou','flo','flau','flowv']
   };
   const ORDEN = ['FV','PB','VA','VZ','F'];
   const NUM = {cero:'0',uno:'1',un:'1',una:'1',dos:'2',tres:'3',cuatro:'4',cinco:'5',seis:'6',siete:'7',ocho:'8',nueve:'9'};
@@ -7996,6 +7996,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   function zonaDe(t, disponibles){
     const compacto=norm(t).replace(/[^a-z0-9]/g,'');
     const palabras=norm(t).split(' ');
+    if(/(flow|flou|flau).*(volumen|bolumen)/.test(compacto) && !disponibles.includes('FV')) return null;   // pidió Flow Volumen y no existe: no confundir con Volumen
     for(const z of ORDEN){
       if(!disponibles.includes(z)) continue;
       const sin=ZONA_SIN[z];
@@ -8023,12 +8024,12 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     zonasEl.innerHTML='';
     if(!prod) return;
     const m=zonasDe(prod), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
-    zs.forEach(z=>{ const b=document.createElement('button'); b.type='button'; b.textContent=z; b.onclick=()=>procesar([z==='F'?'efe':z.toLowerCase()],true); zonasEl.appendChild(b); });
+    zs.forEach(z=>{ const b=document.createElement('button'); b.type='button'; b.textContent=(ZONA_HABLADA[z]||z)+' ('+z+')'; b.onclick=()=>procesar([ZONA_HABLADA[z]||z],true); zonasEl.appendChild(b); });
   }
 
   async function leerZona(z){
     const m=zonasDe(prod), lista=m[z]||[];
-    const partes=lista.map(u=>{ const st=(typeof mpStockLoc==='function')?mpStockLoc(prod,u):null; return 'Ubicación '+ubicHablada(u)+(st==null?'':(st>0?', stock '+st:', sin stock')); });
+    const partes=lista.map(u=>'Ubicación '+ubicHablada(u));
     await hablar((lista.length>1?lista.length+' ubicaciones en '+(ZONA_HABLADA[z]||z)+'. ':'')+partes.join('. ')+'. ¿Otra ubicación o otro código?');
   }
 
@@ -8048,7 +8049,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
       prod=p; pintarZonas();
       try{ const s=$('search'); if(s){ s.value=p.cod; window.q=p.cod; if(typeof q!=='undefined') q=p.cod; render(); } }catch(e){}
       const m=zonasDe(p), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
-      let t='Código '+p.cod.split('').join(' ')+'. '+p.desc+'. '+(p.marca?'Marca '+p.marca+'. ':'')+'Stock total '+(parseInt(p.stock)||0)+'. ';
+      let t='Código '+p.cod.split('').join(' ')+'. '+p.desc+'. '+(p.marca?'Marca '+p.marca+'. ':'');
       if(!zs.length){ await hablar(t+'No tiene ubicaciones registradas. Dime otro código.'); return; }
       if(zs.length===1){ await hablar(t+'Tiene ubicación solo en '+(ZONA_HABLADA[zs[0]]||zs[0])+'.'); await leerZona(zs[0]); return; }
       await hablar(t+'Tiene ubicación en '+zs.map(z=>ZONA_HABLADA[z]||z).join(', ')+'. ¿Qué ubicación necesitas?');
