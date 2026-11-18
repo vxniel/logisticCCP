@@ -8060,6 +8060,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     if(!prod) return;
     const m=zonasDe(prod), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
     zs.forEach(z=>{ const b=document.createElement('button'); b.type='button'; b.textContent=(ZONA_HABLADA[z]||z)+' ('+z+')'; b.onclick=()=>procesar([ZONA_HABLADA[z]||z],true); zonasEl.appendChild(b); });
+    const tb=document.createElement('button'); tb.type='button'; tb.textContent='🧭 Trazabilidad'; tb.onclick=()=>procesar(['trazabilidad'],true); zonasEl.appendChild(tb);
   }
 
   let pag=null;   // {z, lista, idx}: para zonas con muchas ubicaciones (se leen de a 5)
@@ -8072,7 +8073,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     else if(!ini && lista.length>1) t=lista.length+' ubicaciones en '+(ZONA_HABLADA[z]||z)+'. ';
     t+=partes.join('. ')+'. ';
     if(fin<lista.length){ pag={z,lista,idx:fin}; t+='Quedan '+(lista.length-fin)+' más. Di siguiente para continuar, o dime otra ubicación o código.'; }
-    else { pag=null; t+='¿Otra ubicación o otro código?'; }
+    else { pag=null; t+='¿Trazabilidad, otra ubicación u otro código?'; }
     await hablar(t);
   }
 
@@ -8084,16 +8085,16 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     const dia = dias===0?'hoy':dias===1?'ayer':'el '+d.getDate()+' de '+MESES[d.getMonth()];
     return dia+' a las '+hh;
   }
+  // VURRA se lee como "Victor Urra"; los demás tal cual su usuario
+  function usuarioHablado(u){ u=String(u||'').trim(); return u.toUpperCase()==='VURRA' ? 'Victor Urra' : u; }
   function trazaTexto(p){
     try{
       const hist=JSON.parse(localStorage.getItem('dimerc_hist')||'[]').filter(h=>h.cod===p.cod && /Ubicaci|Nuevo/i.test(h.tipo||''));
       if(!hist.length) return 'Sin modificaciones de ubicación registradas.';
       hist.sort((x,y)=>(histParseTs(y)||0)-(histParseTs(x)||0));
-      const h=hist[0], d=histParseTs(h);
-      let t='Última modificación '+(d&&!isNaN(d)?fechaHablada(d):'sin fecha')+(h.user?', por '+h.user:'')+'. ';
-      const de=(h.de||'').trim();
-      t+= (!de||de==='—'||/Nuevo/i.test(h.tipo||'')) ? 'Es un producto nuevo, sin ubicación anterior.' : 'Ubicación anterior: '+ubicHablada(de)+'.';
-      return t;
+      const h=hist[0], de=(h.de||'').trim(), quien=h.user?usuarioHablado(h.user):'un usuario no registrado';
+      if(!de||de==='—'||/Nuevo/i.test(h.tipo||'')) return 'Es un producto nuevo, sin ubicación anterior. Lo creó '+quien+'.';
+      return 'Ubicación anterior: '+ubicHablada(de)+'. Modificó '+quien+'.';
     }catch(e){ return 'No pude leer el historial.'; }
   }
 
@@ -8115,7 +8116,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
       prod=p; pag=null; pintarZonas();
       try{ const s=$('search'); if(s){ s.value=p.cod; window.q=p.cod; if(typeof q!=='undefined') q=p.cod; render(); } }catch(e){}
       const m=zonasDe(p), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
-      let t='Código '+p.cod.split('').join(' ')+'. '+p.desc+'. '+(p.marca?'Marca '+p.marca+'. ':'')+trazaTexto(p)+' ';
+      let t='Código '+p.cod.split('').join(' ')+'. '+p.desc+'. '+(p.marca?'Marca '+p.marca+'. ':'');
       if(!zs.length){ await hablar(t+'No tiene ubicaciones registradas. Dime otro código.'); return; }
       if(zs.length===1){ await hablar(t+'Tiene ubicación solo en '+(ZONA_HABLADA[zs[0]]||zs[0])+'.'); await leerZona(zs[0]); return; }
       await hablar(t+'Tiene ubicación en '+zs.map(z=>(ZONA_HABLADA[z]||z)+(m[z].length>POR_PAG?', '+m[z].length+' ubicaciones':'')).join(', ')+'. ¿Qué ubicación necesitas?');
@@ -8162,7 +8163,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   micBtn.onclick=()=>{ corriendo ? detener() : sesion(); };
   function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; procesar([v],true); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = 'Versión 18-11 01:25 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
+  $('voz-nota').textContent = 'Versión 18-11 01:35 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
   window.vozAsistente={procesar,sesion,detener,_estado:()=>({prod,corriendo})};
 })();
 </script>
