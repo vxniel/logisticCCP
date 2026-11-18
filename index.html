@@ -8103,7 +8103,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   micBtn.onclick=()=>{ corriendo ? detener() : sesion(); };
   function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; procesar([v],true); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).';
+  $('voz-nota').textContent = 'Versión 18-11 00:50 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
   window.vozAsistente={procesar,sesion,detener,_estado:()=>({prod,corriendo})};
 })();
 </script>
