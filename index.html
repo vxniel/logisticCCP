@@ -8015,8 +8015,8 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     if(s.length>=6){
       // Picking Baja, lado 02 = cajones: se lee completo (calle, lado, fila, altura, letra) y se avisa que es cajón
       if(z==='PB' && s[2]==='02') return nom+', cajón, '+[s[1],s[2],s[3],s[4],s[5]].join(', ');
-      // Rack: calle, fila, altura y letra (sin lado ni posición)
-      return nom+', rack, '+[s[1],s[3],s[4],s[5]].join(', ');
+      // Rack: tal cual está en el sistema (calle, lado, fila, altura y letra), sin la posición final
+      return nom+', rack, '+[s[1],s[2],s[3],s[4],s[5]].join(', ');
     }
     return nom+', '+s.slice(1).join(', ');
   }
@@ -8103,7 +8103,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   micBtn.onclick=()=>{ corriendo ? detener() : sesion(); };
   function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; procesar([v],true); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = 'Versión 18-11 00:50 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
+  $('voz-nota').textContent = 'Versión 18-11 00:55 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
   window.vozAsistente={procesar,sesion,detener,_estado:()=>({prod,corriendo})};
 })();
 </script>
