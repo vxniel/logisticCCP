@@ -8076,6 +8076,27 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     await hablar(t);
   }
 
+  // Trazabilidad: última modificación de ubicación y de dónde venía (historial local, que se completa con Firebase)
+  const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  function fechaHablada(d){
+    const hoy=new Date(), a=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()), b=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+    const dias=Math.round((a-b)/86400000), hh=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+    const dia = dias===0?'hoy':dias===1?'ayer':'el '+d.getDate()+' de '+MESES[d.getMonth()];
+    return dia+' a las '+hh;
+  }
+  function trazaTexto(p){
+    try{
+      const hist=JSON.parse(localStorage.getItem('dimerc_hist')||'[]').filter(h=>h.cod===p.cod && /Ubicaci|Nuevo/i.test(h.tipo||''));
+      if(!hist.length) return 'Sin modificaciones de ubicación registradas.';
+      hist.sort((x,y)=>(histParseTs(y)||0)-(histParseTs(x)||0));
+      const h=hist[0], d=histParseTs(h);
+      let t='Última modificación '+(d&&!isNaN(d)?fechaHablada(d):'sin fecha')+(h.user?', por '+h.user:'')+'. ';
+      const de=(h.de||'').trim();
+      t+= (!de||de==='—'||/Nuevo/i.test(h.tipo||'')) ? 'Es un producto nuevo, sin ubicación anterior.' : 'Ubicación anterior: '+ubicHablada(de)+'.';
+      return t;
+    }catch(e){ return 'No pude leer el historial.'; }
+  }
+
   async function procesar(alts, manual){
     const textos=(alts||[]).filter(Boolean); if(!textos.length) return;
     log('yo',textos[0]);
@@ -8084,6 +8105,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
       cancelar=true; if(corriendo||!manual) await hablar('Listo. Hasta luego.'); detener(); return;
     }
     if(/\brepet/.test(todo)){ await hablar(ultimoTexto); return; }
+    if(prod && /(trazabilidad|ultima modificacion|ultimo cambio|ubicacion anterior|que se modifico|cuando se modifico)/.test(todo)){ await hablar(trazaTexto(prod)); return; }
     if(pag && /\b(siguiente|siguientes|mas|continua|continuar|sigue|seguir)\b/.test(todo)){ await leerZona(pag.z, pag.idx); return; }
     // ¿viene un código? (se prefiere la alternativa con más dígitos)
     const cods=textos.map(extraerCodigo).filter(c=>c.length>=3).sort((a,b)=>b.length-a.length);
@@ -8093,7 +8115,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
       prod=p; pag=null; pintarZonas();
       try{ const s=$('search'); if(s){ s.value=p.cod; window.q=p.cod; if(typeof q!=='undefined') q=p.cod; render(); } }catch(e){}
       const m=zonasDe(p), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
-      let t='Código '+p.cod.split('').join(' ')+'. '+p.desc+'. '+(p.marca?'Marca '+p.marca+'. ':'');
+      let t='Código '+p.cod.split('').join(' ')+'. '+p.desc+'. '+(p.marca?'Marca '+p.marca+'. ':'')+trazaTexto(p)+' ';
       if(!zs.length){ await hablar(t+'No tiene ubicaciones registradas. Dime otro código.'); return; }
       if(zs.length===1){ await hablar(t+'Tiene ubicación solo en '+(ZONA_HABLADA[zs[0]]||zs[0])+'.'); await leerZona(zs[0]); return; }
       await hablar(t+'Tiene ubicación en '+zs.map(z=>(ZONA_HABLADA[z]||z)+(m[z].length>POR_PAG?', '+m[z].length+' ubicaciones':'')).join(', ')+'. ¿Qué ubicación necesitas?');
@@ -8140,7 +8162,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   micBtn.onclick=()=>{ corriendo ? detener() : sesion(); };
   function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; procesar([v],true); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = 'Versión 18-11 01:15 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
+  $('voz-nota').textContent = 'Versión 18-11 01:25 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
   window.vozAsistente={procesar,sesion,detener,_estado:()=>({prod,corriendo})};
 })();
 </script>
