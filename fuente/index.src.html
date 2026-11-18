@@ -659,8 +659,8 @@ body.locked #section-produccion{display:none!important}
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',iniciar); else iniciar();
 })();
 </script>
-<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -8040,26 +8040,29 @@ prodCodEl.addEventListener('keydown', e => { if (e.key === 'Enter' && prodCurren
 #voz-fab.on{background:#da3633;border-color:#f85149;animation:vozPulse 1.4s infinite}
 body.locked #voz-fab,body.locked #voz-panel{display:none!important}
 @keyframes vozPulse{0%{box-shadow:0 0 0 0 rgba(248,81,73,.6)}70%{box-shadow:0 0 0 16px rgba(248,81,73,0)}100%{box-shadow:0 0 0 0 rgba(248,81,73,0)}}
-#voz-panel{display:none;position:fixed;left:0;right:0;bottom:0;z-index:9991;background:#161b22;border-top:2px solid #388bfd;border-radius:14px 14px 0 0;padding:12px 14px 14px;box-shadow:0 -8px 30px rgba(0,0,0,.6);max-height:70vh;flex-direction:column;gap:8px;color:#e6edf3}
+#voz-panel{display:none;position:fixed;left:0;right:0;bottom:0;z-index:9991;background:#161b22;border-top:2px solid #388bfd;border-radius:14px 14px 0 0;padding:12px 14px 14px;box-shadow:0 -8px 30px rgba(0,0,0,.6);max-height:88vh;flex-direction:column;color:#e6edf3;font-size:17px}
+#voz-panel>*{margin-bottom:10px}#voz-panel>*:last-child{margin-bottom:0}
 #voz-panel.open{display:flex}
 #voz-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-#voz-title{font-weight:700;font-size:15px}
-#voz-estado{font-size:13px;font-weight:600;padding:3px 10px;border-radius:12px;background:#21262d;color:#8b949e}
+#voz-title{font-weight:700;font-size:18px}
+#voz-estado{font-size:15px;font-weight:600;padding:3px 10px;border-radius:12px;background:#21262d;color:#8b949e}
 #voz-estado.esc{background:#da3633;color:#fff}
 #voz-estado.hab{background:#1f6feb;color:#fff}
-#voz-x{background:none;border:none;color:#8b949e;font-size:22px;cursor:pointer;padding:0 4px}
-#voz-log{overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:70px;max-height:34vh;font-size:14px;line-height:1.35;-webkit-overflow-scrolling:touch}
-.voz-m{padding:7px 10px;border-radius:10px;max-width:92%;word-wrap:break-word}
-.voz-m.yo{align-self:flex-end;background:#1f6feb33;border:1px solid #1f6feb}
-.voz-m.bot{align-self:flex-start;background:#21262d;border:1px solid #30363d}
-#voz-zonas{display:flex;flex-wrap:wrap;gap:6px}
-#voz-zonas button{padding:9px 14px;border-radius:8px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-weight:700;font-size:14px}
-#voz-row{display:flex;gap:6px}
-#voz-in{flex:1;min-width:0;padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:15px}
-#voz-go,#voz-mic{padding:0 14px;border-radius:8px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:15px;font-weight:700}
+#voz-x{background:none;border:none;color:#8b949e;font-size:28px;cursor:pointer;padding:6px 12px}
+#voz-log{overflow-y:auto;display:block;min-height:90px;max-height:46vh;font-size:17px;line-height:1.5;-webkit-overflow-scrolling:touch}
+.voz-m{padding:10px 14px;margin:0 0 10px;border-radius:12px;max-width:92%;word-wrap:break-word;display:block;clear:both}
+.voz-m.yo{float:right;margin-left:8%;background:#1f6feb33;border:1px solid #1f6feb}
+.voz-m.bot{float:left;margin-right:8%;background:#21262d;border:1px solid #30363d}
+#voz-zonas{display:flex;flex-wrap:wrap}#voz-zonas button{margin:0 8px 8px 0}
+#voz-zonas button{padding:13px 18px;border-radius:10px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-weight:700;font-size:17px}
+#voz-row{display:flex}#voz-row>*{margin-right:8px}#voz-row>*:last-child{margin-right:0}
+#voz-in{flex:1;min-width:0;padding:13px;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:18px}
+#voz-go,#voz-mic{padding:0 18px;min-height:48px;border-radius:10px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:17px;font-weight:700}
 #voz-mic{background:#1f6feb;border-color:#388bfd}
 #voz-mic.on{background:#da3633;border-color:#f85149}
-#voz-nota{font-size:11px;color:#8b949e}
+#voz-nota{font-size:13px;line-height:1.4;color:#8b949e}
+#voz-log:after{content:'';display:block;clear:both}
+@media (max-height:480px){#voz-panel{top:0;max-height:none;border-radius:0;padding:8px 12px}#voz-log{max-height:none;flex:1;min-height:60px}}
 </style>
 <button id="voz-fab" type="button" aria-label="Asistente de voz" title="Asistente de voz">🎙️</button>
 <div id="voz-panel" role="dialog" aria-label="Asistente de voz">
@@ -8520,7 +8523,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   function entrada(t){ if(corriendo){ pendienteManual=t; if(abortarEscucha) abortarEscucha(); } else procesar(t,true); }
   function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; entrada([v]); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = 'Versión 18-11 09:55 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
+  $('voz-nota').textContent = 'Versión 18-11 10:40 · ' + (window._fbReady ? 'Sincronizado con la base ✔ · ' : (typeof firebase==='undefined' ? '⚠ SIN sincronizar (no cargó Firebase) · ' : '⏳ Sincronizando… · ')) + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
   window.vozAsistente={abrir:abrirPanel,procesar,sesion,detener,_escaneo:ubicEscaneada,_estado:()=>({prod,corriendo})};
 })();
 </script>
