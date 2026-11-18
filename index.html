@@ -1458,7 +1458,6 @@ const USERS = {
   'APOYO':   '2026',
   'VICTOR URRA': '2907',
   'JCHUNG':  '2025',
-  'JHONA':   '2025',
   'JGALVEZ': '2025',
   'JPGALVEZ': '2025',
   'PSEPULVEDA': '2025'
@@ -1778,7 +1777,7 @@ function irAAsignarNuevo(codigo) {
 }
 
 // ── Permisos: solo estos usuarios tienen todas las funciones; el resto solo las libres ──
-const USUARIOS_COMPLETOS = ['VXNIEL','VURRA','JCHUNG','PSEPULVEDA'];
+const USUARIOS_COMPLETOS = ['VXNIEL','VURRA','VICTOR URRA','JCHUNG','PSEPULVEDA'];
 const TABS_LIBRES = ['buscar','modif','ubic','vcto','trazabilidad'];   // + asistente virtual (siempre disponible)
 function tabBloqueado(tab) {
   const u = String(window._loggedUser || '').toUpperCase();
