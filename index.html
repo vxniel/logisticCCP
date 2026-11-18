@@ -613,7 +613,7 @@ body.locked #section-produccion{display:none!important}
       <div id="remember-row">
         <label id="remember-label">
           <input type="checkbox" id="rememberMe"/>
-          <span id="remember-text">Recordar usuario</span>
+          <span id="remember-text">Recordar usuario y contraseña</span>
         </label>
       </div>
       <div id="lerr"></div>
@@ -1470,7 +1470,9 @@ document.body.classList.add('locked');
   if (saved) {
     document.getElementById('lu').value = saved;
     document.getElementById('rememberMe').checked = true;
-    setTimeout(() => document.getElementById('lp').focus(), 100);
+    const sp = localStorage.getItem('dccp_pass');
+    if (sp) { document.getElementById('lp').value = sp; setTimeout(() => document.getElementById('lbtn').focus(), 100); }
+    else setTimeout(() => document.getElementById('lp').focus(), 100);
   }
 })();
 
@@ -1496,8 +1498,10 @@ function doLogin() {
 
   if (document.getElementById('rememberMe').checked) {
     localStorage.setItem('dccp_user', user);
+    localStorage.setItem('dccp_pass', pass);
   } else {
     localStorage.removeItem('dccp_user');
+    localStorage.removeItem('dccp_pass');
   }
 
   window._loggedUser = user;
