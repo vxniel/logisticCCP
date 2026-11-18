@@ -7878,5 +7878,227 @@ prodCodEl.addEventListener('keydown', e => { if (e.key === 'Enter' && prodCurren
 
 </script>
 
+<!-- ═══════════ ASISTENTE DE VOZ (buscador por voz) ═══════════ -->
+<style>
+#voz-fab{position:fixed;right:14px;bottom:70px;width:58px;height:58px;border-radius:50%;border:2px solid #388bfd;background:#1f6feb;color:#fff;font-size:26px;z-index:9990;box-shadow:0 4px 16px rgba(0,0,0,.5);cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+#voz-fab.on{background:#da3633;border-color:#f85149;animation:vozPulse 1.4s infinite}
+body.locked #voz-fab,body.locked #voz-panel{display:none!important}
+@keyframes vozPulse{0%{box-shadow:0 0 0 0 rgba(248,81,73,.6)}70%{box-shadow:0 0 0 16px rgba(248,81,73,0)}100%{box-shadow:0 0 0 0 rgba(248,81,73,0)}}
+#voz-panel{display:none;position:fixed;left:0;right:0;bottom:0;z-index:9991;background:#161b22;border-top:2px solid #388bfd;border-radius:14px 14px 0 0;padding:12px 14px 14px;box-shadow:0 -8px 30px rgba(0,0,0,.6);max-height:70vh;flex-direction:column;gap:8px;color:#e6edf3}
+#voz-panel.open{display:flex}
+#voz-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#voz-title{font-weight:700;font-size:15px}
+#voz-estado{font-size:13px;font-weight:600;padding:3px 10px;border-radius:12px;background:#21262d;color:#8b949e}
+#voz-estado.esc{background:#da3633;color:#fff}
+#voz-estado.hab{background:#1f6feb;color:#fff}
+#voz-x{background:none;border:none;color:#8b949e;font-size:22px;cursor:pointer;padding:0 4px}
+#voz-log{overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:70px;max-height:34vh;font-size:14px;line-height:1.35;-webkit-overflow-scrolling:touch}
+.voz-m{padding:7px 10px;border-radius:10px;max-width:92%;word-wrap:break-word}
+.voz-m.yo{align-self:flex-end;background:#1f6feb33;border:1px solid #1f6feb}
+.voz-m.bot{align-self:flex-start;background:#21262d;border:1px solid #30363d}
+#voz-zonas{display:flex;flex-wrap:wrap;gap:6px}
+#voz-zonas button{padding:9px 14px;border-radius:8px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-weight:700;font-size:14px}
+#voz-row{display:flex;gap:6px}
+#voz-in{flex:1;min-width:0;padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:15px}
+#voz-go,#voz-mic{padding:0 14px;border-radius:8px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:15px;font-weight:700}
+#voz-mic{background:#1f6feb;border-color:#388bfd}
+#voz-mic.on{background:#da3633;border-color:#f85149}
+#voz-nota{font-size:11px;color:#8b949e}
+</style>
+<button id="voz-fab" type="button" aria-label="Asistente de voz" title="Asistente de voz">🎙️</button>
+<div id="voz-panel" role="dialog" aria-label="Asistente de voz">
+  <div id="voz-head"><span id="voz-title">🎙️ Asistente de bodega</span><span id="voz-estado">En pausa</span><button id="voz-x" type="button" aria-label="Cerrar">✕</button></div>
+  <div id="voz-log"></div>
+  <div id="voz-zonas"></div>
+  <div id="voz-row">
+    <input id="voz-in" type="text" inputmode="numeric" placeholder="Escribe un código..." autocomplete="off"/>
+    <button id="voz-go" type="button">Buscar</button>
+    <button id="voz-mic" type="button">🎙️ Hablar</button>
+  </div>
+  <div id="voz-nota"></div>
+</div>
+<script>
+(function(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const TTS = ('speechSynthesis' in window) ? window.speechSynthesis : null;
+  const $ = id => document.getElementById(id);
+  const fab=$('voz-fab'), panel=$('voz-panel'), logEl=$('voz-log'), estEl=$('voz-estado'), zonasEl=$('voz-zonas'), inEl=$('voz-in'), micBtn=$('voz-mic');
+
+  // Zona -> cómo se pronuncia, y sinónimos que reconoce el micrófono (incluye confusiones b/v)
+  const ZONA_HABLADA = { F:'efe', FV:'efe uve', PB:'pe be', VA:'uve a', VZ:'uve zeta' };
+  const ZONA_SIN = {
+    FV:['fv','fb','efeuve','efeve','efebe','efuve','fuve','efeuvi'],
+    PB:['pb','pv','pebe','peve','pebe','peb','pev','pebes'],
+    VA:['va','ba','uvea','vea','bea','uvea','veah','vaa','bah'],
+    VZ:['vz','bz','uvezeta','vezeta','bezeta','uvezeda','vezzeta','ves'],
+    F:['f','efe','ef','fe','efes']
+  };
+  const ORDEN = ['FV','PB','VA','VZ','F'];
+  const NUM = {cero:'0',uno:'1',un:'1',una:'1',dos:'2',tres:'3',cuatro:'4',cinco:'5',seis:'6',siete:'7',ocho:'8',nueve:'9'};
+  const norm = t => String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[¿?¡!,;:]/g,' ').replace(/\s+/g,' ').trim();
+
+  let corriendo=false, prod=null, ultimoTexto='', rec=null, vozES=null, cancelar=false, tokenSes=0;
+
+  function log(quien, txt){
+    const d=document.createElement('div'); d.className='voz-m '+(quien==='yo'?'yo':'bot'); d.textContent=txt; logEl.appendChild(d);
+    while(logEl.children.length>12) logEl.removeChild(logEl.firstChild);
+    logEl.scrollTop=logEl.scrollHeight;
+  }
+  function estado(t,cls){ estEl.textContent=t; estEl.className=cls||''; }
+
+  // ── Voz (salida) ──
+  function elegirVoz(){
+    if(!TTS) return; const vs=TTS.getVoices()||[];
+    vozES = vs.find(v=>/^es[-_]CL/i.test(v.lang)) || vs.find(v=>/^es[-_](MX|US|419|AR)/i.test(v.lang)) || vs.find(v=>/^es/i.test(v.lang)) || null;
+  }
+  if(TTS){ elegirVoz(); TTS.onvoiceschanged=elegirVoz; }
+  function hablar(texto){
+    ultimoTexto=texto; log('bot',texto);
+    return new Promise(res=>{
+      if(!TTS){ res(); return; }
+      let fin=false; const done=()=>{ if(fin) return; fin=true; clearTimeout(t); res(); };
+      const t=setTimeout(done, 2500 + texto.length*110);   // por si el equipo no avisa el fin de la voz
+      try{
+        TTS.cancel();
+        const u=new SpeechSynthesisUtterance(texto);
+        u.lang=(vozES&&vozES.lang)||'es-CL'; if(vozES) u.voice=vozES; u.rate=1; u.pitch=1; u.volume=1;
+        u.onend=done; u.onerror=done;
+        estado('Hablando','hab'); TTS.speak(u);
+      }catch(e){ done(); }
+    });
+  }
+  let actx=null;
+  function pitido(){ try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); const o=actx.createOscillator(),g=actx.createGain(); o.frequency.value=880; g.gain.value=.15; o.connect(g); g.connect(actx.destination); o.start(); setTimeout(()=>o.stop(),130);}catch(e){} }
+
+  // ── Micrófono (entrada) ──
+  function escuchar(){
+    return new Promise(res=>{
+      if(!SR){ res({error:'nosr'}); return; }
+      let listo=false, alts=[];
+      const fin=v=>{ if(listo) return; listo=true; clearTimeout(tm); try{rec.onend=null;rec.stop();}catch(e){} res(v); };
+      try{
+        rec=new SR(); rec.lang='es-CL'; rec.continuous=false; rec.interimResults=false; rec.maxAlternatives=4;
+        rec.onresult=e=>{ const r=e.results[e.results.length-1]; for(let i=0;i<r.length;i++) alts.push(r[i].transcript); fin({alts}); };
+        rec.onerror=e=>{ fin({error:e.error||'error'}); };
+        rec.onend=()=>fin({alts});
+        pitido(); setTimeout(()=>{ if(!listo){ estado('Escuchando…','esc'); try{rec.start();}catch(e){ fin({error:'start'}); } } },160);
+      }catch(e){ res({error:'start'}); return; }
+      const tm=setTimeout(()=>fin({alts}),9000);
+    });
+  }
+
+  // ── Interpretación ──
+  function extraerCodigo(t){
+    let d='';
+    norm(t).split(' ').forEach(tok=>{ if(/^[\d.,]+$/.test(tok)) d+=tok.replace(/[.,]/g,''); else if(NUM[tok]!==undefined) d+=NUM[tok]; });
+    return d;
+  }
+  function zonaDe(t, disponibles){
+    const compacto=norm(t).replace(/[^a-z0-9]/g,'');
+    const palabras=norm(t).split(' ');
+    for(const z of ORDEN){
+      if(!disponibles.includes(z)) continue;
+      const sin=ZONA_SIN[z];
+      if(sin.includes(compacto) || sin.some(s=>palabras.join('')===s)) return z;
+      if(palabras.length<=4 && sin.some(s=>s.length>=4 && compacto.includes(s))) return z;
+    }
+    return null;
+  }
+  function zonasDe(p){
+    const m={};
+    String(p.ubic||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(u=>{ const z=u.split('-')[0].toUpperCase(); (m[z]=m[z]||[]).push(u); });
+    return m;
+  }
+  function ubicHablada(u){
+    const s=u.split('-'); return s.map((x,i)=> i===0 ? (ZONA_HABLADA[x.toUpperCase()]||x.split('').join(' ')) : x).join(', ');
+  }
+  function buscarProd(cod){
+    let p=null;
+    try{ p=getDedupedData().find(d=>d.cod===cod); }catch(e){}
+    if(!p) p=DATA.find(d=>d.cod===cod);
+    if(!p && BIDX[cod]) p=DATA[BIDX[cod][0]];
+    return p||null;
+  }
+  function pintarZonas(){
+    zonasEl.innerHTML='';
+    if(!prod) return;
+    const m=zonasDe(prod), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
+    zs.forEach(z=>{ const b=document.createElement('button'); b.type='button'; b.textContent=z; b.onclick=()=>procesar([z==='F'?'efe':z.toLowerCase()],true); zonasEl.appendChild(b); });
+  }
+
+  async function leerZona(z){
+    const m=zonasDe(prod), lista=m[z]||[];
+    const partes=lista.map(u=>{ const st=(typeof mpStockLoc==='function')?mpStockLoc(prod,u):null; return 'Ubicación '+ubicHablada(u)+(st==null?'':(st>0?', stock '+st:', sin stock')); });
+    await hablar((lista.length>1?lista.length+' ubicaciones en '+(ZONA_HABLADA[z]||z)+'. ':'')+partes.join('. ')+'. ¿Otra ubicación o otro código?');
+  }
+
+  async function procesar(alts, manual){
+    const textos=(alts||[]).filter(Boolean); if(!textos.length) return;
+    log('yo',textos[0]);
+    const todo=textos.map(norm).join(' | ');
+    if(/\b(cancelar|salir|chao|chau|adios|terminar|nada mas|gracias|basta|listo)\b/.test(todo) || textos.some(t=>/^(no|nada|ninguna|ninguno)$/.test(norm(t)))){
+      cancelar=true; if(corriendo||!manual) await hablar('Listo. Hasta luego.'); detener(); return;
+    }
+    if(/\brepet/.test(todo)){ await hablar(ultimoTexto); return; }
+    // ¿viene un código? (se prefiere la alternativa con más dígitos)
+    const cods=textos.map(extraerCodigo).filter(c=>c.length>=3).sort((a,b)=>b.length-a.length);
+    if(cods.length){
+      const cod=cods[0], p=buscarProd(cod);
+      if(!p){ prod=null; pintarZonas(); await hablar('No encontré el código '+cod.split('').join(' ')+'. Dime otro código.'); return; }
+      prod=p; pintarZonas();
+      try{ const s=$('search'); if(s){ s.value=p.cod; window.q=p.cod; if(typeof q!=='undefined') q=p.cod; render(); } }catch(e){}
+      const m=zonasDe(p), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
+      let t='Código '+p.cod.split('').join(' ')+'. '+p.desc+'. '+(p.marca?'Marca '+p.marca+'. ':'')+'Stock total '+(parseInt(p.stock)||0)+'. ';
+      if(!zs.length){ await hablar(t+'No tiene ubicaciones registradas. Dime otro código.'); return; }
+      if(zs.length===1){ await hablar(t+'Tiene ubicación solo en '+(ZONA_HABLADA[zs[0]]||zs[0])+'.'); await leerZona(zs[0]); return; }
+      await hablar(t+'Tiene ubicación en '+zs.map(z=>ZONA_HABLADA[z]||z).join(', ')+'. ¿Qué ubicación necesitas?');
+      return;
+    }
+    if(prod){
+      const m=zonasDe(prod), zs=Object.keys(m);
+      if(/\b(todas|todo|todos)\b/.test(todo)){ for(const z of zs){ await leerZona(z); if(!corriendo&&!manual) break; } return; }
+      let z=null; for(const t of textos){ z=zonaDe(t,zs); if(z) break; }
+      if(z){ await leerZona(z); return; }
+      await hablar('No entendí la ubicación. Opciones: '+zs.map(x=>ZONA_HABLADA[x]||x).join(', ')+'. O dime otro código.');
+      return;
+    }
+    await hablar('No entendí el código. Dímelo número por número.');
+  }
+
+  // ── Sesión de conversación ──
+  async function sesion(){
+    if(corriendo) return;
+    corriendo=true; cancelar=false; const mi=++tokenSes; fab.classList.add('on'); micBtn.classList.add('on'); micBtn.textContent='⏹ Parar';
+    prod=null; pintarZonas();
+    await hablar('Hola. Dime el código.');
+    let fallos=0;
+    while(corriendo && mi===tokenSes){
+      const r=await escuchar();
+      if(!corriendo || mi!==tokenSes) break;
+      if(r.error==='nosr'){ log('bot','Este equipo no permite reconocer voz. Escribe el código abajo y te lo leo.'); break; }
+      if(r.error==='not-allowed'||r.error==='service-not-allowed'){ log('bot','Falta permiso del micrófono. Actívalo en la configuración del navegador para este sitio.'); break; }
+      if(!r.alts||!r.alts.length){
+        if(++fallos>=3){ await hablar('No te escucho. Termino la conversación.'); break; }
+        await hablar('No te escuché. Repite, por favor.'); continue;
+      }
+      fallos=0; await procesar(r.alts,false);
+    }
+    detener();
+  }
+  function detener(){
+    corriendo=false; tokenSes++; try{ rec&&(rec.onend=null,rec.stop()); }catch(e){} try{ TTS&&TTS.cancel(); }catch(e){}
+    fab.classList.remove('on'); micBtn.classList.remove('on'); micBtn.textContent='🎙️ Hablar'; estado('En pausa','');
+  }
+
+  fab.onclick=()=>{ panel.classList.add('open'); fab.style.display='none'; if(!logEl.children.length) log('bot','Toca "Hablar" y dime un código. También puedes escribirlo abajo.'); };
+  $('voz-x').onclick=()=>{ detener(); panel.classList.remove('open'); fab.style.display=''; };
+  micBtn.onclick=()=>{ corriendo ? detener() : sesion(); };
+  function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; procesar([v],true); }
+  $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
+  $('voz-nota').textContent = SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).';
+  window.vozAsistente={procesar,sesion,detener,_estado:()=>({prod,corriendo})};
+})();
+</script>
+
 </body>
 </html>
