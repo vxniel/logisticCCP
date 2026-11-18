@@ -7990,6 +7990,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     <button id="voz-mic" type="button">🎙️ Hablar</button>
   </div>
   <div id="voz-nota"></div>
+  <div id="voz-diagbox" style="font-size:11px;color:#8b949e;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button id="voz-test" type="button" style="padding:6px 10px;border-radius:8px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:12px;font-weight:700">🔊 Probar voz</button><span id="voz-diag-info"></span><span id="voz-diag" style="width:100%"></span></div>
 </div>
 <script>
 (function(){
@@ -8026,22 +8027,56 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     if(!TTS) return; const vs=TTS.getVoices()||[];
     vozES = vs.find(v=>/^es[-_]CL/i.test(v.lang)) || vs.find(v=>/^es[-_](MX|US|419|AR)/i.test(v.lang)) || vs.find(v=>/^es/i.test(v.lang)) || null;
   }
-  if(TTS){ elegirVoz(); TTS.onvoiceschanged=elegirVoz; }
-  function hablar(texto, voz){
+  if(TTS){ elegirVoz(); TTS.onvoiceschanged=()=>{ elegirVoz(); try{diagnostico();}catch(e){} }; }
+  // Voz de salida con respaldo: algunos navegadores de Android (WebView, Via) no tienen el idioma pedido o
+  // aceptan hablar y no emiten sonido. Se prueba es-CL, luego otros español, y se recuerda el que funcione.
+  let langOK=null, vozFalla=false, avisoVoz=false;
+  function hablarUna(texto, lang){
+    return new Promise(res=>{
+      let ini=false, fin=false;
+      const cerrar=v=>{ if(fin) return; fin=true; clearTimeout(tIni); clearTimeout(tMax); res(v); };
+      const tIni=setTimeout(()=>{ if(!ini){ try{TTS.cancel();}catch(e){} cerrar('noinicio'); } }, 2200);
+      const tMax=setTimeout(()=>cerrar(ini?'ok':'noinicio'), 4000 + texto.length*120);   // por si no avisa el fin
+      try{
+        if(TTS.speaking||TTS.pending) TTS.cancel();
+        const u=new SpeechSynthesisUtterance(texto);
+        u.lang=lang; const v=(TTS.getVoices()||[]).find(x=>x.lang&&x.lang.replace('_','-').toLowerCase()===lang.toLowerCase()); if(v) u.voice=v;
+        u.rate=1; u.pitch=1; u.volume=1;
+        u.onstart=()=>{ ini=true; };
+        u.onend=()=>cerrar('ok'); u.onerror=e=>cerrar(ini?'ok':'error');
+        TTS.speak(u); try{ TTS.resume(); }catch(e){}
+      }catch(e){ cerrar('error'); }
+    });
+  }
+  async function hablar(texto, voz){
     ultimoTexto=texto; log('bot',texto);
     if(voz!=null) texto=voz;
-    return new Promise(res=>{
-      if(!TTS){ res(); return; }
-      let fin=false; const done=()=>{ if(fin) return; fin=true; clearTimeout(t); res(); };
-      const t=setTimeout(done, 2500 + texto.length*110);   // por si el equipo no avisa el fin de la voz
-      try{
-        TTS.cancel();
-        const u=new SpeechSynthesisUtterance(texto);
-        u.lang=(vozES&&vozES.lang)||'es-CL'; if(vozES) u.voice=vozES; u.rate=1; u.pitch=1; u.volume=1;
-        u.onend=done; u.onerror=done;
-        estado('Hablando','hab'); TTS.speak(u);
-      }catch(e){ done(); }
-    });
+    if(!TTS||vozFalla){ return; }
+    estado('Hablando','hab');
+    const langs=[langOK, vozES&&vozES.lang, 'es-CL','es-MX','es-US','es-ES','es'].filter((x,i,a)=>x&&a.indexOf(x)===i);
+    for(const l of langs){
+      const r=await hablarUna(texto,l);
+      if(r==='ok'){ langOK=l; return; }
+    }
+    // ningún idioma sonó: se avisa una sola vez y se sigue con el texto en pantalla
+    vozFalla=true;
+    if(!avisoVoz){ avisoVoz=true; log('bot','🔇 Este navegador no emite voz. Revisa el motor de texto a voz del equipo (Ajustes › Idioma › Salida de texto a voz) o usa Chrome. Toca "Probar voz" para diagnosticar.'); }
+  }
+  async function probarVoz(){
+    const d=$('voz-diag'); vozFalla=false; avisoVoz=true;
+    if(!TTS){ d.textContent='🔇 Este navegador no tiene voz de salida (speechSynthesis).'; return; }
+    d.textContent='Probando…'; let usado=null;
+    for(const l of ['es-CL','es-MX','es-US','es-ES','es','en-US']){
+      const r=await hablarUna(l==='en-US'?'Voice test':'Hola, prueba de voz',l);
+      if(r==='ok'){ usado=l; break; }
+    }
+    if(usado && usado!=='en-US'){ langOK=usado; d.textContent='✅ La voz funciona ('+usado+'). Si no la oyes, sube el volumen del equipo.'; }
+    else if(usado){ d.textContent='⚠️ Solo suena en inglés: falta el idioma español en el motor de texto a voz del equipo.'; }
+    else { d.textContent='🔇 Sin sonido: el equipo no tiene motor de texto a voz activo o el navegador no lo usa.'; }
+  }
+  function diagnostico(){
+    const nv=TTS?(TTS.getVoices()||[]).length:0;
+    $('voz-diag-info').textContent='Voz de salida: '+(TTS?'sí ('+nv+' voces)':'no')+' · Reconocimiento: '+(SR?'sí':'no');
   }
   let actx=null;
   function pitido(){ try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); const o=actx.createOscillator(),g=actx.createGain(); o.frequency.value=880; g.gain.value=.15; o.connect(g); g.connect(actx.destination); o.start(); setTimeout(()=>o.stop(),130);}catch(e){} }
@@ -8395,14 +8430,15 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     fab.classList.remove('on'); micBtn.classList.remove('on'); micBtn.textContent='🎙️ Hablar'; estado('En pausa','');
   }
 
-  fab.onclick=()=>{ panel.classList.add('open'); fab.style.display='none'; if(!logEl.children.length) log('bot','Toca "Hablar" y dime un código. También puedes escribirlo abajo.'); };
+  $('voz-test').onclick=probarVoz;
+  fab.onclick=()=>{ diagnostico(); panel.classList.add('open'); fab.style.display='none'; if(!logEl.children.length) log('bot','Toca "Hablar" y dime un código. También puedes escribirlo abajo.'); };
   $('voz-x').onclick=()=>{ detener(); panel.classList.remove('open'); fab.style.display=''; };
   micBtn.onclick=()=>{ corriendo ? detener() : sesion(); };
   // Texto escrito, escaneado (lector de la Zebra) o botones: si hay conversación activa, se atiende sin que el micrófono capte la voz del asistente
   function entrada(t){ if(corriendo){ pendienteManual=t; if(abortarEscucha) abortarEscucha(); } else procesar(t,true); }
   function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; entrada([v]); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = 'Versión 18-11 02:50 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
+  $('voz-nota').textContent = 'Versión 18-11 09:55 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
   window.vozAsistente={procesar,sesion,detener,_escaneo:ubicEscaneada,_estado:()=>({prod,corriendo})};
 })();
 </script>
