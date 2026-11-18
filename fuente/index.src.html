@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1117">
 <meta charset="UTF-8">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231B3FA0'/><text y='.9em' font-size='80' x='10'>🏭</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231B3FA0'/><text y='.9em' font-size='80' x='10'>🏭</text></svg>">
@@ -717,7 +721,7 @@ body.locked #section-produccion{display:none!important}
 <div class="watermark">by <span>Vxniel</span></div>
 
 <div id="fb-toast"></div>
-<div id="tools-menu" role="menu"><button type="button" onclick="abrirHerramienta('calc')">🧮 Calculadora</button><button type="button" onclick="abrirHerramienta('voz')">🎙️ Asistente virtual</button></div>
+<div id="tools-menu" role="menu"><button type="button" onclick="abrirHerramienta('calc')">🧮 Calculadora</button><button type="button" onclick="abrirHerramienta('voz')">🎙️ Asistente virtual</button><button type="button" onclick="abrirHerramienta('full')">⛶ Pantalla completa</button></div>
 <div id="cat-modal" onclick="if(event.target===this)cerrarFotoCatalogo()"><div id="cat-box"></div></div>
 
 <div id="calc-modal" onclick="if(event.target===this)toggleCalculadora()">
@@ -5576,6 +5580,17 @@ function abrirHerramienta(que) {
   document.getElementById('tools-menu').classList.remove('open');
   if (que === 'calc') toggleCalculadora();
   else if (que === 'voz' && window.vozAsistente) window.vozAsistente.abrir();
+  else if (que === 'full') pantallaCompleta();
+}
+function pantallaCompleta() {
+  try {
+    const d = document, el = d.documentElement;
+    const activa = d.fullscreenElement || d.webkitFullscreenElement;
+    if (activa) { (d.exitFullscreen || d.webkitExitFullscreen).call(d); return; }
+    const f = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen || el.mozRequestFullScreen;
+    if (f) f.call(el);
+    else alert('Este navegador no permite pantalla completa desde la página. Usa el menú ⋮ de Chrome › "Agregar a pantalla de inicio" y abre la app desde ese icono.');
+  } catch (e) { console.error('pantalla completa falló', e); }
 }
 document.addEventListener('click', e => {
   const m = document.getElementById('tools-menu');
