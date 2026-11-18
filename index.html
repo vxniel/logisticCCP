@@ -8086,15 +8086,44 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     return dia+' a las '+hh;
   }
   // VURRA se lee como "Victor Urra"; los demás tal cual su usuario
-  function usuarioHablado(u){ u=String(u||'').trim(); return u.toUpperCase()==='VURRA' ? 'Victor Urra' : u; }
+  const MASTERS=['VURRA','VXNIEL','VICTOR URRA'];
+  const esMaster=u=>MASTERS.includes(String(u||'').trim().toUpperCase());
+  function usuarioHablado(u){ u=String(u||'').trim(); const U=u.toUpperCase(); return (U==='VURRA'||U==='VICTOR URRA') ? 'Victor Urra' : u; }
+  const pick=a=>a[Math.floor(Math.random()*a.length)];
+  const FRASES_MASTER=[
+    'Victor Urra, también conocido como Vxniel, es el Master de la app y el creador supremo. Sin él nada de esto existiría.',
+    'Hablas del Master de la app, el creador supremo Victor Urra. Una leyenda de la bodega.',
+    'Vxniel, el creador supremo de la app y el Master de todo el sistema. Un verdadero crack.'];
+  const FRASES_MEJOR=[
+    'El mejor es Victor Urra, el creador supremo de la app. Nadie le llega a los talones.',
+    'Sin duda alguna, el mejor es Victor Urra, el Master de la app y creador supremo. Un genio.',
+    'El número uno, el más grande, el mejor: Victor Urra, el creador supremo de la app.'];
+  const FRASES_ANIMO=[
+    n=>n+', vas a ser el mejor de la bodega. Sigue así, tú puedes.',
+    n=>n+', cada código bien ubicado es un paso hacia la excelencia. Adelante.',
+    n=>n+', el esfuerzo de hoy es el orgullo de mañana. Vamos con todo.',
+    n=>n+', eres una pieza clave de este equipo. A seguir dando lo mejor.',
+    n=>n+', ¡qué buen trabajo estás haciendo! Nada te detiene.'];
+  const ALIAS_MASTER=['vxniel','vexniel','vaniel','vxnyel','vexnil','bexniel','vurra','victorurra','viktorurra','vitorurra'];
+  function saludoEspecial(textos){
+    const comp=textos.map(t=>norm(t).replace(/[^a-z0-9]/g,''));
+    const pal=textos.map(t=>norm(t).split(' ').length);
+    if(comp.some((c,i)=>pal[i]<=7 && ALIAS_MASTER.some(a=>c.includes(a)))) return pick(FRASES_MASTER);
+    if(textos.some(t=>/(quien es el mejor|el mejor de todos|quien es el mas crack|quien es el crack|quien manda|el mejor operador)/.test(norm(t)))) return pick(FRASES_MEJOR);
+    const nombres=Object.keys(USERS).filter(u=>!esMaster(u));
+    for(let i=0;i<comp.length;i++){ if(pal[i]>4) continue;
+      const u=nombres.find(n=>comp[i].includes(n.toLowerCase().replace(/[^a-z0-9]/g,'')));
+      if(u) return pick(FRASES_ANIMO)(u.toLowerCase()); }
+    return null;
+  }
   function trazaTexto(p){
     try{
       const hist=JSON.parse(localStorage.getItem('dimerc_hist')||'[]').filter(h=>h.cod===p.cod && /Ubicaci|Nuevo/i.test(h.tipo||''));
       if(!hist.length) return 'Sin modificaciones de ubicación registradas.';
       hist.sort((x,y)=>(histParseTs(y)||0)-(histParseTs(x)||0));
       const h=hist[0], de=(h.de||'').trim(), quien=h.user?usuarioHablado(h.user):'un usuario no registrado';
-      if(!de||de==='—'||/Nuevo/i.test(h.tipo||'')) return 'Es un producto nuevo, sin ubicación anterior. Lo creó '+quien+'.';
-      return 'Ubicación anterior: '+ubicHablada(de)+'. Modificó '+quien+'.';
+      if(!de||de==='—'||/Nuevo/i.test(h.tipo||'')) return 'Es un producto nuevo, sin ubicación anterior. Lo creó '+quien+(esMaster(h.user)?', el Master de la app y creador supremo':'')+'.';
+      return 'Ubicación anterior: '+ubicHablada(de)+'. Modificó '+quien+(esMaster(h.user)?', el Master de la app y creador supremo':'')+'.';
     }catch(e){ return 'No pude leer el historial.'; }
   }
 
@@ -8110,6 +8139,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     if(pag && /\b(siguiente|siguientes|mas|continua|continuar|sigue|seguir)\b/.test(todo)){ await leerZona(pag.z, pag.idx); return; }
     // ¿viene un código? (se prefiere la alternativa con más dígitos)
     const cods=textos.map(extraerCodigo).filter(c=>c.length>=3).sort((a,b)=>b.length-a.length);
+    if(!cods.length){ const e=saludoEspecial(textos); if(e){ await hablar(e+(prod?'':' Dime un código.')); return; } }
     if(cods.length){
       const cod=cods[0], p=buscarProd(cod);
       if(!p){ prod=null; pintarZonas(); await hablar('No encontré el código '+cod.split('').join(' ')+'. Dime otro código.'); return; }
@@ -8163,7 +8193,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   micBtn.onclick=()=>{ corriendo ? detener() : sesion(); };
   function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; procesar([v],true); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = 'Versión 18-11 01:35 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
+  $('voz-nota').textContent = 'Versión 18-11 01:45 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
   window.vozAsistente={procesar,sesion,detener,_estado:()=>({prod,corriendo})};
 })();
 </script>
