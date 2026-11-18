@@ -4524,6 +4524,7 @@ function _setupFirebase() {
       const esReplay = !!changeTs && changeTs < _fbStartTs - 5000;
       if (esReplay && d.tipo === 'stock') return;
       const esEcoLocal = d.saveId && window._recentLocalSaves && window._recentLocalSaves.has(d.saveId);
+      try { (window._fbVistos = window._fbVistos || {})[(d.tipo||'') + '|' + d.cod + '|' + String(d.de||'').toUpperCase() + '|' + String(d.a||'').toUpperCase()] = changeTs || 1; } catch(e) {}
       if (d.tipo === 'ubic') {
         if (typeof DATA !== 'undefined')
           prodsDe(d.cod).forEach(p => {
@@ -4654,6 +4655,35 @@ function _setupFirebase() {
     console.log('✅ Firebase inicializado correctamente');
     try { window.flushCambiosPend && window.flushCambiosPend(); } catch(e) {}
 
+    // ── Reparación del registro: todo cambio de ubicación que quedó solo en el historial LOCAL
+    //    (p. ej. hecho con el asistente mientras Firebase no cargaba) se reenvía a la base común
+    //    para que aparezca en el historial de todos los equipos. Evita duplicados.
+    window.repararHistorial = function() {
+      return new Promise(function(resolve) {
+        cambRef.once('value', function() {
+          try {
+            try { _histFlush(); } catch(e) {}
+            const vistos = window._fbVistos || {};
+            const pend = _pendGet().map(function(x) { return (x.tipo||'') + '|' + x.cod + '|' + String(x.de||'').toUpperCase() + '|' + String(x.a||'').toUpperCase(); });
+            let hist = JSON.parse(localStorage.getItem('dimerc_hist') || '[]'), n = 0, cambio = false;
+            hist.forEach(function(h) {
+              if (h._sync || !h._tsRaw || String(h.tipo||'').indexOf('Ubicación') < 0 || !h.de || !h.a || !h.cod) return;
+              const t = new Date(h._tsRaw).getTime();
+              if (!t || t < _fbBaseTs) { h._sync = 1; cambio = true; return; }
+              const k = 'ubic|' + h.cod + '|' + String(h.de).toUpperCase() + '|' + String(h.a).toUpperCase();
+              if (vistos[k] || pend.indexOf(k) >= 0) { h._sync = 1; cambio = true; return; }
+              window.encolarCambio(h.cod, h.desc, h.de, h.a, h.user, 'ubic', null, h._tsRaw);
+              h._sync = 1; cambio = true; n++;
+            });
+            if (cambio) localStorage.setItem('dimerc_hist', JSON.stringify(hist));
+            if (n) console.log('🔁 Historial reparado: ' + n + ' cambio(s) reenviados');
+            resolve(n);
+          } catch(e) { console.error('repararHistorial falló', e); resolve(0); }
+        });
+      });
+    };
+    setTimeout(function() { try { window.repararHistorial(); } catch(e) {} }, 6000);
+
   } catch(e) {
     console.error('❌ Firebase setup error:', e);
   }
@@ -4664,9 +4694,9 @@ const CAMB_PEND_KEY = 'dimerc_cambios_pend';
 const _pendEnviando = new Set();
 function _pendGet(){ try{ return JSON.parse(localStorage.getItem(CAMB_PEND_KEY)||'[]'); }catch(e){ return []; } }
 function _pendSet(a){ try{ localStorage.setItem(CAMB_PEND_KEY, JSON.stringify(a)); }catch(e){} }
-window.encolarCambio = function(cod, desc, de, a, user, tipo, extra) {
+window.encolarCambio = function(cod, desc, de, a, user, tipo, extra, tsFijo) {
   const q = _pendGet();
-  q.push({ id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,8), cod, desc, de, a, user, tipo, extra: extra || null, ts: getOfficialNow().toISOString() });
+  q.push({ id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,8), cod, desc, de, a, user, tipo, extra: extra || null, ts: tsFijo || getOfficialNow().toISOString() });
   _pendSet(q);
   window.flushCambiosPend();
 };
@@ -8538,7 +8568,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   function entrada(t){ if(corriendo){ pendienteManual=t; if(abortarEscucha) abortarEscucha(); } else procesar(t,true); }
   function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; entrada([v]); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = 'Versión 18-11 10:40 · ' + (window._fbReady ? 'Sincronizado con la base ✔ · ' : (typeof firebase==='undefined' ? '⚠ SIN sincronizar (no cargó Firebase) · ' : '⏳ Sincronizando… · ')) + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
+  $('voz-nota').textContent = 'Versión 18-11 10:40 · ' + (window._fbReady ? 'Sincronizado con la base ✔' + ((JSON.parse(localStorage.getItem('dimerc_cambios_pend')||'[]').length) ? ' (' + JSON.parse(localStorage.getItem('dimerc_cambios_pend')||'[]').length + ' por enviar)' : '') + ' · ' : (typeof firebase==='undefined' ? '⚠ SIN sincronizar (no cargó Firebase) · ' : '⏳ Sincronizando… · ')) + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
   window.vozAsistente={abrir:abrirPanel,procesar,sesion,detener,_escaneo:ubicEscaneada,_estado:()=>({prod,corriendo})};
 })();
 </script>
