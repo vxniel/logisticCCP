@@ -4361,6 +4361,7 @@ function _setupFirebase() {
       Object.keys(_histBuf).forEach(k => { try { localStorage.setItem(k, JSON.stringify(_histBuf[k])); } catch(e) {} delete _histBuf[k]; });
     }
     window.addEventListener('pagehide', _histFlush);
+    window._histFlush = _histFlush;
     function guardarEnHistorialLocal(key, entry) {
       try {
         const hist = _histBuf[key] || JSON.parse(localStorage.getItem(key)||'[]');
@@ -8060,10 +8061,16 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   }
   function pintarZonas(){
     zonasEl.innerHTML='';
+    if(modo==='conf'){
+      const ok=document.createElement('button'); ok.type='button'; ok.textContent='✅ Confirmar'; ok.onclick=()=>procesar(['sí'],true);
+      const no=document.createElement('button'); no.type='button'; no.textContent='❌ Cancelar'; no.onclick=()=>procesar(['cancelar'],true);
+      zonasEl.appendChild(ok); zonasEl.appendChild(no); return;
+    }
     if(!prod) return;
     const m=zonasDe(prod), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
     zs.forEach(z=>{ const b=document.createElement('button'); b.type='button'; b.textContent=(ZONA_HABLADA[z]||z)+' ('+z+')'; b.onclick=()=>procesar([ZONA_HABLADA[z]||z],true); zonasEl.appendChild(b); });
     const tb=document.createElement('button'); tb.type='button'; tb.textContent='🧭 Trazabilidad'; tb.onclick=()=>procesar(['trazabilidad'],true); zonasEl.appendChild(tb);
+    const mb=document.createElement('button'); mb.type='button'; mb.textContent='✏️ Mover ubicación'; mb.onclick=()=>procesar(['mover ubicación'],true); zonasEl.appendChild(mb);
   }
 
   let pag=null;   // {z, lista, idx}: para zonas con muchas ubicaciones (se leen de a 5)
@@ -8141,14 +8148,141 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     }catch(e){ const t='No pude leer el historial.'; return {texto:t,voz:t}; }
   }
 
+
+  // ══════ Mover ubicación por voz (con confirmación) ══════
+  let modo=null, mv=null;   // modo: 'zona' | 'num' | 'nueva' | 'conf'
+  const UNI={cero:0,un:1,uno:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,veinte:20,veintiun:21,veintiuno:21,veintidos:22,veintitres:23,veinticuatro:24,veinticinco:25,veintiseis:26,veintisiete:27,veintiocho:28,veintinueve:29,treinta:30,cuarenta:40,cincuenta:50};
+  const LETRAS={a:'A',b:'B',be:'B',c:'C',ce:'C',se:'C',d:'D',de:'D'};
+  const p2=n=>String(n).padStart(2,'0');
+  // Números de una frase, en orden. "cero cinco"→5, "veinte y ocho"→28, "05"→5; también "28a"→28 + letra A
+  function numerosDe(t){
+    const tok=norm(t).split(' ').filter(Boolean), out=[]; let letraPegada=null;
+    for(let i=0;i<tok.length;i++){
+      const w=tok[i]; let m;
+      if(/^\d+$/.test(w)){ if(w.length>=8&&w.length%2===0){ for(let k=0;k<w.length;k+=2) out.push(parseInt(w.substr(k,2),10)); } else out.push(parseInt(w,10)); continue; }
+      if((m=w.match(/^(\d+)([a-d])$/))){ out.push(parseInt(m[1],10)); letraPegada=m[2].toUpperCase(); continue; }
+      if(w==='cero' && UNI[tok[i+1]]>=1 && UNI[tok[i+1]]<=9){ out.push(UNI[tok[i+1]]); i++; continue; }
+      if(UNI[w]!==undefined){
+        if(UNI[w]>=20 && UNI[w]%10===0 && tok[i+1]==='y' && UNI[tok[i+2]]>=1 && UNI[tok[i+2]]<=9){ out.push(UNI[w]+UNI[tok[i+2]]); i+=2; continue; }
+        out.push(UNI[w]);
+      }
+    }
+    return {nums:out, letraPegada};
+  }
+  function letraDe(t,pegada){
+    if(pegada) return pegada;
+    const tok=norm(t).split(' ').filter(Boolean), k=tok.lastIndexOf('letra');
+    if(k>=0 && LETRAS[tok[k+1]]) return LETRAS[tok[k+1]];
+    const last=tok[tok.length-1]; return LETRAS[last]||null;
+  }
+  function zonaNombrada(t){
+    const c=norm(t).replace(/[^a-z0-9 ]/g,''), k=c.replace(/ /g,'');
+    if(/flow ?volumen|flou ?volumen|flowvolumen/.test(c)||k.includes('flowvolumen')) return 'FV';
+    if(/picking|pikin|pickin/.test(c)) return 'PB';
+    if(/volumen|bolumen/.test(c)) return 'VA';
+    if(/uve ?zeta|vezeta|bezeta|\bvz\b/.test(c)||k.includes('uvezeta')) return 'VZ';
+    if(/\bflow\b|\bflou\b/.test(c)) return 'F';
+    return null;
+  }
+  // Interpreta "calle 5, lado 1, fila 28, altura 1, letra A" (o solo los números en ese orden)
+  function interpretarUbic(textos, zonaDefecto){
+    for(const t of textos){
+      const z=zonaNombrada(t)||zonaDefecto, tok=norm(t).split(' ').filter(Boolean), v={};
+      ['calle','lado','fila','altura'].forEach(lbl=>{ const k=tok.indexOf(lbl); if(k>=0){ const n=numerosDe(tok.slice(k+1,k+4).join(' ')).nums; if(n.length) v[lbl]=n[0]; } });
+      const nd=numerosDe(t), L=letraDe(t,nd.letraPegada);
+      let a=null;
+      if(v.calle!=null&&v.lado!=null&&v.fila!=null&&v.altura!=null) a=[v.calle,v.lado,v.fila,v.altura];
+      else if(nd.nums.length>=4) a=nd.nums.slice(0,4);
+      if(!a||!L) continue;
+      const [cc,ll,ff,aa]=a;
+      if(cc<1||cc>5||ll<1||ll>2||ff<1||ff>60||aa<1||aa>8) continue;
+      return {ubic:[z,p2(cc),p2(ll),p2(ff),p2(aa),L,'01'].join('-')};
+    }
+    return null;
+  }
+  const dime='Dime calle, lado, fila, altura y letra. Por ejemplo: calle 5, lado 1, fila 28, altura 1, letra A.';
+  function mvLimpiar(){ modo=null; mv=null; pintarZonas(); }
+  async function mvIniciar(){
+    if(!prod){ await hablar('Primero dime el código del producto.'); return; }
+    if(!window._loggedUser){ await hablar('Necesito que hayas iniciado sesión para registrar el cambio.'); return; }
+    const m=zonasDe(prod), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
+    if(!zs.length){ await hablar('Este producto no tiene ubicación que cambiar. Usa Modificar en pantalla para asignarle una.'); return; }
+    mv={cod:prod.cod};
+    if(zs.length===1){ await mvZona(zs[0]); return; }
+    modo='zona'; pintarZonas();
+    await hablar('Vas a cambiar una ubicación. ¿De qué zona? '+zs.map(z=>ZONA_HABLADA[z]||z).join(', ')+'.');
+  }
+  async function mvZona(z){
+    const lista=zonasDe(prod)[z]||[]; mv.zona=z; mv.lista=lista; mv.pag=0;
+    if(lista.length===1){ mv.vieja=lista[0]; modo='nueva'; await hablar('Cambiar '+ubicHablada(mv.vieja)+'. ¿A qué ubicación la quieres mover? '+dime+' Si es otra zona, dila primero.'); return; }
+    modo='num'; await mvListar();
+  }
+  async function mvListar(){
+    const ini=mv.pag*POR_PAG, fin=Math.min(mv.lista.length,ini+POR_PAG);
+    const t=(ini===0?mv.lista.length+' ubicaciones en '+(ZONA_HABLADA[mv.zona]||mv.zona)+'. ':'')+mv.lista.slice(ini,fin).map((u,k)=>'Número '+(ini+k+1)+': '+ubicHablada(u,true)).join('. ')+'. '+(fin<mv.lista.length?'Di siguiente para más. ':'')+'¿Cuál quieres cambiar? Dime el número.';
+    await hablar(t);
+  }
+  async function mvConfirmar(){
+    const otros=DATA.filter(d=>d.cod!==mv.cod && String(d.ubic||'').split(',').some(u=>u.trim().toUpperCase()===mv.nueva)).length;
+    modo='conf'; pintarZonas();
+    await hablar('Confirmo: mover desde '+ubicHablada(mv.vieja)+', hacia '+ubicHablada(mv.nueva)+'. '+(otros?'Ojo: en esa ubicación ya hay '+otros+(otros===1?' producto. ':' productos. '):'')+'¿Confirmas? Di sí o no.');
+  }
+  async function mvAplicar(){
+    const user=String(window._loggedUser||'').trim(), cod=mv.cod, vieja=mv.vieja, nueva=mv.nueva;
+    const filas=DATA.filter(d=>d.cod===cod); let hecho=false;
+    filas.forEach(d=>{ const parts=String(d.ubic||'').split(',').map(x=>x.trim()).filter(Boolean), i=parts.findIndex(x=>x.toUpperCase()===vieja.toUpperCase()); if(i>=0){ parts[i]=nueva; d.ubic=parts.join(','); hecho=true; } });
+    if(!hecho){ mvLimpiar(); await hablar('No encontré esa ubicación en el producto; puede que ya la hayan cambiado. No guardé nada.'); return; }
+    try{ window._histFlush && window._histFlush(); }catch(e){}
+    const now=getOfficialNow(), desc=(prod&&prod.desc)||filas[0].desc;
+    window.encolarCambio(cod, desc, vieja, nueva, user, 'ubic');
+    const hist=JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
+    hist.unshift({ ts:now.toLocaleString('es-CL'), _tsRaw:now.toISOString(), tipo:'📍 Ubicación ('+zonePrefixOf(vieja)+')', cod, desc, de:vieja, a:nueva, user });
+    if(hist.length>5000) hist.pop();
+    localStorage.setItem('dimerc_hist', JSON.stringify(hist));
+    prod=buscarProd(cod); mvLimpiar();
+    try{ render(); renderModHistory(); }catch(e){}
+    await hablar('Listo. Ubicación cambiada y registrada a nombre de '+usuarioHablado(user)+'. Ahora está en '+ubicHablada(nueva)+'. ¿Otro código?');
+  }
+  async function procesarMov(textos){
+    const todo=textos.map(norm).join(' | ');
+    if(/\b(cancelar|cancela|olvidalo|dejalo|no gracias|abortar)\b/.test(todo) || (modo==='conf' && textos.some(t=>/^(no|nop|negativo)$/.test(norm(t))))){
+      mvLimpiar(); await hablar('Cancelado. No cambié nada. Dime otro código o una ubicación.'); return;
+    }
+    if(modo==='zona'){
+      const zs=Object.keys(zonasDe(prod)); let z=null;
+      for(const t of textos){ z=zonaDe(t,zs)||(zs.includes(zonaNombrada(t))?zonaNombrada(t):null); if(z) break; }
+      if(!z){ await hablar('No entendí la zona. Opciones: '+zs.map(x=>ZONA_HABLADA[x]||x).join(', ')+'.'); return; }
+      await mvZona(z); return;
+    }
+    if(modo==='num'){
+      if(/\b(siguiente|mas|siguientes)\b/.test(todo) && (mv.pag+1)*POR_PAG<mv.lista.length){ mv.pag++; await mvListar(); return; }
+      let n=null; for(const t of textos){ const r=numerosDe(t).nums; if(r.length){ n=r[0]; break; } }
+      if(!n||n<1||n>mv.lista.length){ await hablar('No entendí el número. Dime un número entre 1 y '+mv.lista.length+'.'); return; }
+      mv.vieja=mv.lista[n-1]; modo='nueva';
+      await hablar('Cambiar '+ubicHablada(mv.vieja)+'. ¿A qué ubicación la quieres mover? '+dime+' Si es otra zona, dila primero.'); return;
+    }
+    if(modo==='nueva'){
+      const r=interpretarUbic(textos, mv.vieja.split('-')[0].toUpperCase());
+      if(!r){ await hablar('No entendí la ubicación. '+dime); return; }
+      if(r.ubic.toUpperCase()===mv.vieja.toUpperCase()){ await hablar('Esa es la misma ubicación que ya tiene. Dime otra distinta.'); return; }
+      mv.nueva=r.ubic; await mvConfirmar(); return;
+    }
+    if(modo==='conf'){
+      if(textos.some(t=>/\b(si|sí|confirmo|confirmado|confirmar|dale|ok|okey|correcto|de acuerdo|adelante)\b/.test(norm(t)))){ await mvAplicar(); return; }
+      await hablar('No te entendí. Di sí para confirmar o no para cancelar.'); return;
+    }
+  }
+
   async function procesar(alts, manual){
     const textos=(alts||[]).filter(Boolean); if(!textos.length) return;
     log('yo',textos[0]);
+    if(modo){ await procesarMov(textos); return; }
     const todo=textos.map(norm).join(' | ');
     if(/\b(cancelar|salir|chao|chau|adios|terminar|nada mas|gracias|basta|listo)\b/.test(todo) || textos.some(t=>/^(no|nada|ninguna|ninguno)$/.test(norm(t)))){
       cancelar=true; if(corriendo||!manual) await hablar('Listo. Hasta luego.'); detener(); return;
     }
     if(/\brepet/.test(todo)){ await hablar(ultimoTexto); return; }
+    if(!extraerCodigo(textos[0]) && /(\bmover\b|\bmuevo\b|cambiar (la )?ubicacion|cambio de ubicacion|reubicar|modificar (la )?ubicacion|\bcambiar\b)/.test(todo)){ await mvIniciar(); return; }
     if(prod && /(trazabilidad|ultima modificacion|ultimo cambio|ubicacion anterior|que se modifico|cuando se modifico)/.test(todo)){ const tz=trazaTexto(prod); await hablar(tz.texto, tz.voz); return; }
     if(pag && /\b(siguiente|siguientes|mas|continua|continuar|sigue|seguir)\b/.test(todo)){ await leerZona(pag.z, pag.idx); return; }
     // ¿viene un código? (se prefiere la alternativa con más dígitos)
@@ -8157,7 +8291,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     if(cods.length){
       const cod=cods[0], p=buscarProd(cod);
       if(!p){ prod=null; pintarZonas(); await hablar('No encontré el código '+cod.split('').join(' ')+'. Dime otro código.'); return; }
-      prod=p; pag=null; pintarZonas();
+      prod=p; pag=null; modo=null; mv=null; pintarZonas();
       try{ const s=$('search'); if(s){ s.value=p.cod; window.q=p.cod; if(typeof q!=='undefined') q=p.cod; render(); } }catch(e){}
       const m=zonasDe(p), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
       let t='Código '+p.cod.split('').join(' ')+'. '+p.desc+'. '+(p.marca?'Marca '+p.marca+'. ':'');
@@ -8198,7 +8332,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     detener();
   }
   function detener(){
-    corriendo=false; tokenSes++; try{ rec&&(rec.onend=null,rec.stop()); }catch(e){} try{ TTS&&TTS.cancel(); }catch(e){}
+    modo=null; mv=null; corriendo=false; tokenSes++; try{ rec&&(rec.onend=null,rec.stop()); }catch(e){} try{ TTS&&TTS.cancel(); }catch(e){}
     fab.classList.remove('on'); micBtn.classList.remove('on'); micBtn.textContent='🎙️ Hablar'; estado('En pausa','');
   }
 
@@ -8207,7 +8341,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   micBtn.onclick=()=>{ corriendo ? detener() : sesion(); };
   function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; procesar([v],true); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = 'Versión 18-11 02:05 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
+  $('voz-nota').textContent = 'Versión 18-11 02:30 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
   window.vozAsistente={procesar,sesion,detener,_estado:()=>({prod,corriendo})};
 })();
 </script>
