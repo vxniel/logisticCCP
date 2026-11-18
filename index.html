@@ -1342,6 +1342,42 @@ const REF_DESC_CATALOGO = {"531001": "ACEITE VEGETAL 900 ML MIRAFLORES", "530105
 const BIDX={};
 DATA.forEach((d,i)=>d.barras.forEach(b=>{if(!BIDX[b])BIDX[b]=[];BIDX[b].push(i);}));
 
+// ===== Productos nuevos: se indexan al instante y se guardan en el dispositivo =====
+// (DATA vive en memoria: sin esto, un producto creado desaparecía al recargar si Firebase no alcanzaba a guardarlo)
+function bidxIndexar(i){ const d=DATA[i]; if(!d) return; (d.barras||[]).forEach(b=>{ if(!BIDX[b]) BIDX[b]=[]; if(!BIDX[b].includes(i)) BIDX[b].push(i); }); }
+const NUEVOS_KEY='dimerc_prod_nuevos';
+function nuevosCacheGet(){ try{ return JSON.parse(localStorage.getItem(NUEVOS_KEY)||'[]'); }catch(e){ return []; } }
+function nuevosCacheSet(a){ try{ localStorage.setItem(NUEVOS_KEY, JSON.stringify(a)); }catch(e){} }
+function registrarProductoNuevo(prod, opts){
+  opts = opts || {};
+  if(!prod || !prod.cod) return;
+  if(!Array.isArray(prod.barras) || !prod.barras.length) prod.barras = [prod.cod];
+  const ex = DATA.findIndex(d => d.cod === prod.cod);
+  if(ex >= 0){
+    const d = DATA[ex];
+    if(!Array.isArray(d.barras)) d.barras = [];
+    prod.barras.forEach(b => { if(!d.barras.includes(b)) d.barras.push(b); });
+    if(!d.marca && prod.marca) d.marca = prod.marca;
+    if(!d.vidaUtil && prod.vidaUtil) d.vidaUtil = prod.vidaUtil;
+    bidxIndexar(ex);
+  } else {
+    DATA.push(prod); bidxIndexar(DATA.length-1);
+  }
+  if(opts.persistir !== false){
+    const c = nuevosCacheGet(), k = c.findIndex(x => x && x.cod === prod.cod);
+    if(k >= 0) c[k] = Object.assign({}, c[k], prod); else c.push(prod);
+    nuevosCacheSet(c);
+  }
+}
+// Mantiene al día (ubicación/stock) la copia local de los productos nuevos
+function nuevosCacheSync(){
+  const c = nuevosCacheGet(); if(!c.length) return;
+  let ch = false;
+  c.forEach(x => { const d = DATA.find(p => p.cod === x.cod); if(d && (d.ubic !== x.ubic || d.stock !== x.stock)){ x.ubic = d.ubic; x.stock = d.stock; x.zones = d.zones; x.calle = d.calle; x.dep = d.dep; ch = true; } });
+  if(ch) nuevosCacheSet(c);
+}
+nuevosCacheGet().forEach(p => { try{ registrarProductoNuevo(p, {persistir:false}); }catch(e){ console.error('producto nuevo local', e); } });
+
 const CALLES={'1':'Calle 1','2':'Calle 2','3':'Calle 3','4':'Calle 4','5':'Calle 5'};
 const CCLS={'1':'','2':'c2','3':'c3','4':'c4','5':'c5'};
 
@@ -1572,7 +1608,7 @@ function render(){
   const total=res.length,limited=total>80;
   if(limited)res=res.slice(0,80);
   document.getElementById('notice').style.display=limited?'block':'none';
-  document.getElementById('stats').innerHTML=`<span class="dot"></span> <b>${total}</b> producto${total!==1?'s':''} encontrado${total!==1?'s':''} de <b>${TOTAL.toLocaleString('es-CL')}</b>`;
+  document.getElementById('stats').innerHTML=`<span class="dot"></span> <b>${total}</b> producto${total!==1?'s':''} encontrado${total!==1?'s':''} de <b>${Math.max(TOTAL, new Set(DATA.map(x => x.cod)).size).toLocaleString('es-CL')}</b>`;
 
   const el=document.getElementById('results');
   if(!total){
@@ -2210,18 +2246,7 @@ function modSave() {
   err.textContent=''; err.style.cssText='';
 
   // Safe Firebase caller con reintentos
-  const safePush = (cod, desc, de, a, user, tipo) => {
-    const attempt = (tries) => {
-      if (typeof window.pushCambioFirebase === 'function' && window._fbReady) {
-        window.pushCambioFirebase(cod, desc, de, a, user, tipo);
-      } else if (tries > 0) {
-        setTimeout(() => attempt(tries - 1), 500);
-      } else {
-        console.error('❌ Firebase no disponible después de varios intentos');
-      }
-    };
-    attempt(10); // hasta 10 reintentos cada 500ms = 5 segundos
-  };
+  const safePush = (cod, desc, de, a, user, tipo) => { window.encolarCambio(cod, desc, de, a, user, tipo); };
 
   if(modTypeAtStep2 === 'ubic') {
     // ── GUARDAR UBICACIÓN (solo la zona editada) ──
@@ -2720,17 +2745,11 @@ function nuevoProductoSave() {
   if (window._nuevoVidaUtilPendiente) {
     nuevoProd.vidaUtil = window._nuevoVidaUtilPendiente;
   }
-  DATA.push(nuevoProd);
+  registrarProductoNuevo(nuevoProd);   // en DATA + índice de códigos de barra + copia local (visible al instante en el buscador)
   window._nuevoVidaUtilPendiente = null;
 
-  const attempt = (tries) => {
-    if (typeof window.pushCambioFirebase === 'function' && window._fbReady) {
-      window.pushCambioFirebase(cod, desc, '—', ubic, user, 'nuevo');
-    } else if (tries > 0) {
-      setTimeout(() => attempt(tries - 1), 500);
-    }
-  };
-  attempt(10);
+  // Se encola localmente y se envía a Firebase apenas haya conexión (no se pierde si no hay señal)
+  window.encolarCambio(cod, desc, '—', ubic, user, 'nuevo', { barras, marca: '', vidaUtil: nuevoProd.vidaUtil || null });
 
   const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
   hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo:'🆕 Nuevo Producto', cod: cod, desc: desc, de: '—', a: ubic, user: user });
@@ -3808,9 +3827,9 @@ function vctoSave() {
   if (newElab) vctoCurrentProduct.elab = newElab;
 
   // Firebase (mismo patrón de reintentos que modSave)
+  window.encolarCambio(vctoCurrentProduct.cod, vctoCurrentProduct.desc, oldVcto, newVcto, user, 'vcto');
   const attempt = (tries) => {
     if (typeof window.pushCambioFirebase === 'function' && window._fbReady) {
-      window.pushCambioFirebase(vctoCurrentProduct.cod, vctoCurrentProduct.desc, oldVcto, newVcto, user, 'vcto');
       if (newElab && window._db) {
         window._db.ref('elaboracion/'+vctoCurrentProduct.cod).set({ cod: vctoCurrentProduct.cod, desc: vctoCurrentProduct.desc, elab: newElab, user, ts: getOfficialNow().toISOString() })
           .catch(err2 => console.error('❌ Firebase error (elaboracion):', err2));
@@ -4366,11 +4385,13 @@ function _setupFirebase() {
           DATA.forEach(p => { if (p.cod === d.cod) { p.vcto = d.a; p.tieneVz = 'S'; } });
         if (!esEcoLocal) guardarEnHistorialLocal('dimerc_vcto_hist', { ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, cod: d.cod, desc: d.desc, de: d.de, a: d.a, user: d.user });
       } else if (d.tipo === 'nuevo') {
-        if (typeof DATA !== 'undefined' && !DATA.some(p => p.cod === d.cod)) {
-          const zona = (d.a||'').split('-')[0] || '';
+        if (typeof DATA !== 'undefined') {
           const calle = (d.a||'').split('-')[1] || '';
-          const dep = (d.a||'').split('-')[4] || '';
-          DATA.push({ cod: d.cod, desc: d.desc, calle, dep, ubic: d.a, marca: '', stock: 0, barras: [d.cod], vcto: '', tieneVz: 'N' });
+          const dep = (d.a||'').split('-')[5] || '';
+          const barras = Array.isArray(d.barras) && d.barras.length ? d.barras : [d.cod];
+          const np = { cod: d.cod, desc: d.desc, calle, dep, ubic: d.a, marca: d.marca || '', stock: 0, barras, vcto: '', tieneVz: 'N' };
+          if (d.vidaUtil) np.vidaUtil = d.vidaUtil;
+          registrarProductoNuevo(np);
         }
         if (!esEcoLocal) guardarEnHistorialLocal('dimerc_hist', { ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, tipo:'🆕 Nuevo Producto', cod: d.cod, desc: d.desc, de: '—', a: d.a, user: d.user });
       }
@@ -4447,31 +4468,76 @@ function _setupFirebase() {
   });
 
     // ── Guardar cambio ────────────────
-    window.pushCambioFirebase = function(cod, desc, de, a, user, tipo) {
+    window.pushCambioFirebase = function(cod, desc, de, a, user, tipo, extra, opts) {
+      opts = opts || {};
       const saveId = 'save_' + Date.now() + '_' + Math.random().toString(36).slice(2,9);
       window._recentLocalSaves = window._recentLocalSaves || new Set();
       window._recentLocalSaves.add(saveId);
       setTimeout(() => window._recentLocalSaves.delete(saveId), 60000); // limpiar tras 1 minuto
-      cambRef.push({
+      cambRef.push(Object.assign({}, extra || {}, {
         cod, desc, de, a, user,
         tipo: tipo || 'ubic',
-        ts: getOfficialNow().toISOString(),
+        ts: opts.ts || getOfficialNow().toISOString(),
         saveId
-      }).then(() => {
+      })).then(() => {
         console.log('✅ Firebase: cambio guardado', tipo, cod);
+        if (opts.onOk) opts.onOk();
       }).catch(err => {
         console.error('❌ Firebase error:', err);
+        if (opts.onFail) opts.onFail();
       });
       return saveId;
     };
 
     window._fbReady = true;
     console.log('✅ Firebase inicializado correctamente');
+    try { window.flushCambiosPend && window.flushCambiosPend(); } catch(e) {}
 
   } catch(e) {
     console.error('❌ Firebase setup error:', e);
   }
 }
+
+// ===== Cola de cambios pendientes: nada se pierde si no hay señal al guardar =====
+const CAMB_PEND_KEY = 'dimerc_cambios_pend';
+const _pendEnviando = new Set();
+function _pendGet(){ try{ return JSON.parse(localStorage.getItem(CAMB_PEND_KEY)||'[]'); }catch(e){ return []; } }
+function _pendSet(a){ try{ localStorage.setItem(CAMB_PEND_KEY, JSON.stringify(a)); }catch(e){} }
+window.encolarCambio = function(cod, desc, de, a, user, tipo, extra) {
+  const q = _pendGet();
+  q.push({ id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,8), cod, desc, de, a, user, tipo, extra: extra || null, ts: getOfficialNow().toISOString() });
+  _pendSet(q);
+  window.flushCambiosPend();
+};
+window.flushCambiosPend = function() {
+  if (!(typeof window.pushCambioFirebase === 'function' && window._fbReady)) return;
+  _pendGet().forEach(it => {
+    if (_pendEnviando.has(it.id)) return;
+    _pendEnviando.add(it.id);
+    window.pushCambioFirebase(it.cod, it.desc, it.de, it.a, it.user, it.tipo, it.extra, {
+      ts: it.ts,
+      onOk: () => { _pendSet(_pendGet().filter(x => x.id !== it.id)); _pendEnviando.delete(it.id); },
+      onFail: () => { _pendEnviando.delete(it.id); }
+    });
+  });
+};
+window.addEventListener('online', () => { try { window.flushCambiosPend(); } catch(e) {} });
+setInterval(() => { try { window.flushCambiosPend(); } catch(e) {} }, 15000);
+
+// Tras cualquier cambio de datos (render): refresca el mapa si está abierto y mantiene la copia local de productos nuevos
+let _postRenderT = null;
+function _postRender() {
+  clearTimeout(_postRenderT);
+  _postRenderT = setTimeout(() => {
+    try {
+      nuevosCacheSync();
+      const sm = document.getElementById('section-mapa');
+      const editando = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('mp-qty');
+      if (sm && sm.style.display !== 'none' && !editando && typeof renderMapaVirtual === 'function') renderMapaVirtual();
+    } catch(e) { console.error('post-render', e); }
+  }, 250);
+}
+(function(){ const _r = render; render = function(){ const out = _r.apply(this, arguments); _postRender(); return out; }; })();
 
 function _fbToast(msg) {
   const t = document.getElementById('fb-toast');
@@ -5142,11 +5208,7 @@ function mpGuardarStock(cod, loc, inputId) {
     window._db.ref('estado_stock/' + cod).set({ zones, ts: getOfficialNow().toISOString(), user })
       .catch(e => console.error('❌ estado_stock set falló (mapa)', e));
   }
-  const push = (tries) => {
-    if (typeof window.pushCambioFirebase === 'function' && window._fbReady) window.pushCambioFirebase(cod, prod.desc, String(totalAnt), String(totalNuevo), user, 'stock');
-    else if (tries > 0) setTimeout(() => push(tries - 1), 500);
-  };
-  push(10);
+  window.encolarCambio(cod, prod.desc, String(totalAnt), String(totalNuevo), user, 'stock');
   const hist = JSON.parse(localStorage.getItem('dimerc_hist') || '[]');
   hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo: '📦 Stock (Mapa)', cod, desc: prod.desc, de: String(totalAnt), a: String(totalNuevo), user });
   if (hist.length > 5000) hist.pop();
@@ -6816,18 +6878,7 @@ function renderCI() {
 }
 
 // ===== Aplicar conteo interno al sistema (ajustar stock según lo contado físicamente) =====
-function ciSafePushFirebase(cod, desc, de, a, user, tipo) {
-  const attempt = (tries) => {
-    if (typeof window.pushCambioFirebase === 'function' && window._fbReady) {
-      window.pushCambioFirebase(cod, desc, de, a, user, tipo);
-    } else if (tries > 0) {
-      setTimeout(() => attempt(tries - 1), 500);
-    } else {
-      console.error('❌ Firebase no disponible después de varios intentos (conteo interno)');
-    }
-  };
-  attempt(10);
-}
+function ciSafePushFirebase(cod, desc, de, a, user, tipo) { window.encolarCambio(cod, desc, de, a, user, tipo); }
 // Valor actual conocido de una ubicación concreta de un producto (igual lógica que
 // migrarValorLegacy, pero sin depender de modCurrentProduct/modLocSlots globales).
 function ciValorZonaActual(prod, zonesGuardadas, loc, ubicList) {
