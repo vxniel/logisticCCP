@@ -4329,9 +4329,15 @@ function _setupFirebase() {
     const _fbBaseTs = new Date('2026-11-02T14:55:00Z').getTime(); // base de datos actualizada 02-11 11:55 (UTC-3)
     // Guarda un cambio recibido de Firebase en el historial local correspondiente,
     // evitando duplicados si el propio dispositivo ya lo tenía registrado.
+    const _histBuf = {}; let _histT = null;
+    function _histFlush() {
+      Object.keys(_histBuf).forEach(k => { try { localStorage.setItem(k, JSON.stringify(_histBuf[k])); } catch(e) {} delete _histBuf[k]; });
+    }
+    window.addEventListener('pagehide', _histFlush);
     function guardarEnHistorialLocal(key, entry) {
       try {
-        const hist = JSON.parse(localStorage.getItem(key)||'[]');
+        const hist = _histBuf[key] || JSON.parse(localStorage.getItem(key)||'[]');
+        _histBuf[key] = hist;
         const yaExiste = hist.some(h => {
           // Comparar por timestamp ISO real cuando esté disponible (más confiable que el string ya formateado)
           if (h._tsRaw && entry._tsRaw) return h._tsRaw === entry._tsRaw && h.cod === entry.cod;
@@ -4340,10 +4346,24 @@ function _setupFirebase() {
         if (yaExiste) return;
         hist.unshift(entry);
         if (hist.length > 5000) hist.pop();
-        localStorage.setItem(key, JSON.stringify(hist));
+        clearTimeout(_histT); _histT = setTimeout(_histFlush, 800);
       } catch(e) { console.error('guardarEnHistorialLocal falló', e); }
     }
 
+    // Índice cod -> productos (evita recorrer los 4.400 productos por cada cambio recibido)
+    let _cmap = null, _cmapN = -1;
+    function prodsDe(cod) {
+      if (!_cmap || _cmapN !== DATA.length) { _cmap = new Map(); DATA.forEach(p => { const a = _cmap.get(p.cod); if (a) a.push(p); else _cmap.set(p.cod, [p]); }); _cmapN = DATA.length; }
+      return _cmap.get(cod) || [];
+    }
+    window._prodsDe = prodsDe;
+    // Redibujado agrupado: al abrir la app llegan cientos de cambios seguidos; se dibuja una sola vez
+    let _rdT = null, _lastEvt = 0;
+    function renderAgrupado(replay) {
+      _lastEvt = Date.now();
+      clearTimeout(_rdT);
+      _rdT = setTimeout(() => { try { if (typeof render === 'function') render(); } catch(e) {} }, replay ? 700 : 120);
+    }
     cambRef.on('child_added', snap => {
       try {
       const d = snap.val();
@@ -4360,8 +4380,8 @@ function _setupFirebase() {
       const esEcoLocal = d.saveId && window._recentLocalSaves && window._recentLocalSaves.has(d.saveId);
       if (d.tipo === 'ubic') {
         if (typeof DATA !== 'undefined')
-          DATA.forEach(p => {
-            if (p.cod === d.cod) {
+          prodsDe(d.cod).forEach(p => {
+            {
               const parts = (p.ubic||'').split(',').map(s=>s.trim()).filter(Boolean);
               const deUp = (d.de||'').toUpperCase();
               let i = parts.findIndex(u => u.toUpperCase() === deUp);
@@ -4378,11 +4398,11 @@ function _setupFirebase() {
         if (!esEcoLocal) guardarEnHistorialLocal('dimerc_hist', { ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, tipo:'📍 Ubicación', cod: d.cod, desc: d.desc, de: d.de, a: d.a, user: d.user });
       } else if (d.tipo === 'stock') {
         if (typeof DATA !== 'undefined')
-          DATA.forEach(p => { if (p.cod === d.cod) p.stock = parseInt(d.a)||0; });
+          prodsDe(d.cod).forEach(p => { p.stock = parseInt(d.a)||0; });
         if (!esEcoLocal) guardarEnHistorialLocal('dimerc_hist', { ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, tipo:'📦 Stock', cod: d.cod, desc: d.desc, de: d.de, a: d.a, user: d.user });
       } else if (d.tipo === 'vcto') {
         if (typeof DATA !== 'undefined')
-          DATA.forEach(p => { if (p.cod === d.cod) { p.vcto = d.a; p.tieneVz = 'S'; } });
+          prodsDe(d.cod).forEach(p => { p.vcto = d.a; p.tieneVz = 'S'; });
         if (!esEcoLocal) guardarEnHistorialLocal('dimerc_vcto_hist', { ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, cod: d.cod, desc: d.desc, de: d.de, a: d.a, user: d.user });
       } else if (d.tipo === 'nuevo') {
         if (typeof DATA !== 'undefined') {
@@ -4396,7 +4416,7 @@ function _setupFirebase() {
         if (!esEcoLocal) guardarEnHistorialLocal('dimerc_hist', { ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, tipo:'🆕 Nuevo Producto', cod: d.cod, desc: d.desc, de: '—', a: d.a, user: d.user });
       }
       try {
-        if (typeof render === 'function') render();
+        renderAgrupado(esReplay);
         if (!esReplay) _fbToast((d.tipo==='stock'?'📦':d.tipo==='vcto'?'⏰':d.tipo==='nuevo'?'🆕':'📍')+' '+d.user+': '+d.desc.substring(0,25)+'...');
       } catch(e) {
         console.error('Firebase listener: render/toast falló', e);
@@ -4453,14 +4473,9 @@ function _setupFirebase() {
       const zonesObj = entry && entry.zones;
       if (!zonesObj) return;
       const total = Object.values(zonesObj).reduce((s,v) => s + (parseInt(v)||0), 0);
-      DATA.forEach(p => {
-        if (p.cod === cod && (p.stock !== total)) {
-          p.stock = total;
-          p.zones = zonesObj;
-          changed = true;
-        } else if (p.cod === cod) {
-          p.zones = zonesObj;
-        }
+      (window._prodsDe ? window._prodsDe(cod) : DATA.filter(p => p.cod === cod)).forEach(p => {
+        if (p.stock !== total) { p.stock = total; changed = true; }
+        p.zones = zonesObj;
       });
     });
     if (changed && typeof render === 'function') render();
@@ -4549,10 +4564,12 @@ function _fbToast(msg) {
 window.showToast = window.showToastFB = _fbToast;
 
 // Run when DOM is ready
+// Se inicia un instante después para que el login quede interactivo primero
+const _iniciarFb = () => setTimeout(_setupFirebase, 400);
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', _setupFirebase);
+  document.addEventListener('DOMContentLoaded', _iniciarFb);
 } else {
-  _setupFirebase();
+  _iniciarFb();
 }
 
 // ═══════════════════════════════════════
