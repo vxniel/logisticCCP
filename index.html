@@ -7979,8 +7979,9 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     vozES = vs.find(v=>/^es[-_]CL/i.test(v.lang)) || vs.find(v=>/^es[-_](MX|US|419|AR)/i.test(v.lang)) || vs.find(v=>/^es/i.test(v.lang)) || null;
   }
   if(TTS){ elegirVoz(); TTS.onvoiceschanged=elegirVoz; }
-  function hablar(texto){
+  function hablar(texto, voz){
     ultimoTexto=texto; log('bot',texto);
+    if(voz!=null) texto=voz;
     return new Promise(res=>{
       if(!TTS){ res(); return; }
       let fin=false; const done=()=>{ if(fin) return; fin=true; clearTimeout(t); res(); };
@@ -8116,15 +8117,25 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
       if(u) return pick(FRASES_ANIMO)(u.toLowerCase()); }
     return null;
   }
+  // Ubicación anterior: "Volumen, CALLE 3, VA-03-01-01-01-A" (en pantalla); al hablar se separan las letras y números
+  function anteriorFmt(de){
+    const sg=de.split('-'), z=sg[0].toUpperCase(), nom=ZONA_HABLADA[z]||sg[0];
+    if(sg.length<6) return {texto:nom+', '+de, voz:nom+', '+sg.join(', ')};
+    const cajon=(z==='PB' && sg[2]==='02'), calle=parseInt(sg[1],10)||sg[1];
+    const codigo=sg.slice(0,6).join('-'), codVoz=[z.split('').join(' ')].concat(sg.slice(1,6)).join(', ');
+    return {texto:nom+', '+(cajon?'cajón, ':'')+'CALLE '+calle+', '+codigo, voz:nom+', '+(cajon?'cajón, ':'')+'calle '+calle+', '+codVoz};
+  }
   function trazaTexto(p){
     try{
       const hist=JSON.parse(localStorage.getItem('dimerc_hist')||'[]').filter(h=>h.cod===p.cod && /Ubicaci|Nuevo/i.test(h.tipo||''));
-      if(!hist.length) return 'Sin modificaciones de ubicación registradas.';
+      if(!hist.length){ const t='Sin modificaciones de ubicación registradas.'; return {texto:t,voz:t}; }
       hist.sort((x,y)=>(histParseTs(y)||0)-(histParseTs(x)||0));
       const h=hist[0], de=(h.de||'').trim(), quien=h.user?usuarioHablado(h.user):'un usuario no registrado';
-      if(!de||de==='—'||/Nuevo/i.test(h.tipo||'')) return 'Es un producto nuevo, sin ubicación anterior. Lo creó '+quien+(esMaster(h.user)?', el Master de la app y creador supremo':'')+'.';
-      return 'Ubicación anterior: '+ubicHablada(de)+'. Modificó '+quien+(esMaster(h.user)?', el Master de la app y creador supremo':'')+'.';
-    }catch(e){ return 'No pude leer el historial.'; }
+      const titulo=esMaster(h.user)?', el Master de la app y creador supremo':'';
+      if(!de||de==='—'||/Nuevo/i.test(h.tipo||'')){ const t='Es un producto nuevo, sin ubicación anterior. Lo creó '+quien+titulo+'.'; return {texto:t,voz:t}; }
+      const a=anteriorFmt(de), fin='. Modificó '+quien+titulo+'.';
+      return {texto:'Ubicación anterior: '+a.texto+fin, voz:'Ubicación anterior: '+a.voz+fin};
+    }catch(e){ const t='No pude leer el historial.'; return {texto:t,voz:t}; }
   }
 
   async function procesar(alts, manual){
@@ -8135,7 +8146,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
       cancelar=true; if(corriendo||!manual) await hablar('Listo. Hasta luego.'); detener(); return;
     }
     if(/\brepet/.test(todo)){ await hablar(ultimoTexto); return; }
-    if(prod && /(trazabilidad|ultima modificacion|ultimo cambio|ubicacion anterior|que se modifico|cuando se modifico)/.test(todo)){ await hablar(trazaTexto(prod)); return; }
+    if(prod && /(trazabilidad|ultima modificacion|ultimo cambio|ubicacion anterior|que se modifico|cuando se modifico)/.test(todo)){ const tz=trazaTexto(prod); await hablar(tz.texto, tz.voz); return; }
     if(pag && /\b(siguiente|siguientes|mas|continua|continuar|sigue|seguir)\b/.test(todo)){ await leerZona(pag.z, pag.idx); return; }
     // ¿viene un código? (se prefiere la alternativa con más dígitos)
     const cods=textos.map(extraerCodigo).filter(c=>c.length>=3).sort((a,b)=>b.length-a.length);
@@ -8193,7 +8204,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   micBtn.onclick=()=>{ corriendo ? detener() : sesion(); };
   function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; procesar([v],true); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = 'Versión 18-11 01:45 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
+  $('voz-nota').textContent = 'Versión 18-11 01:55 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
   window.vozAsistente={procesar,sesion,detener,_estado:()=>({prod,corriendo})};
 })();
 </script>
