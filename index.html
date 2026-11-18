@@ -8011,7 +8011,14 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     return m;
   }
   function ubicHablada(u){
-    const s=u.split('-'); return s.map((x,i)=> i===0 ? (ZONA_HABLADA[x.toUpperCase()]||x.split('').join(' ')) : x).join(', ');
+    const s=u.split('-'), z=s[0].toUpperCase(), nom=ZONA_HABLADA[z]||s[0].split('').join(' ');
+    if(s.length>=6){
+      // Picking Baja, lado 02 = cajones: se lee completo (calle, lado, fila, altura, letra) y se avisa que es cajón
+      if(z==='PB' && s[2]==='02') return nom+', cajón, '+[s[1],s[2],s[3],s[4],s[5]].join(', ');
+      // Rack: calle, fila, altura y letra (sin lado ni posición)
+      return nom+', rack, '+[s[1],s[3],s[4],s[5]].join(', ');
+    }
+    return nom+', '+s.slice(1).join(', ');
   }
   function buscarProd(cod){
     let p=null;
