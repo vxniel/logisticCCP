@@ -8034,18 +8034,19 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   }
   function zonasDe(p){
     const m={};
-    String(p.ubic||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(u=>{ const z=u.split('-')[0].toUpperCase(); (m[z]=m[z]||[]).push(u); });
+    const vistos=new Set();
+    String(p.ubic||'').split(',').map(s=>s.trim()).filter(Boolean).concat(Object.keys(p.vzDet||{})).forEach(u=>{ if(vistos.has(u)) return; vistos.add(u); const z=u.split('-')[0].toUpperCase(); (m[z]=m[z]||[]).push(u); });
     return m;
   }
-  function ubicHablada(u){
-    const s=u.split('-'), z=s[0].toUpperCase(), nom=ZONA_HABLADA[z]||s[0].split('').join(' ');
+  function ubicHablada(u, sinZona){
+    const s=u.split('-'), z=s[0].toUpperCase(), nom=sinZona?'':((ZONA_HABLADA[z]||s[0].split('').join(' '))+', ');
     if(s.length>=6){
       // Picking Baja, lado 02 = cajones: se lee completo (calle, lado, fila, altura, letra) y se avisa que es cajón
-      if(z==='PB' && s[2]==='02') return nom+', cajón, '+[s[1],s[2],s[3],s[4],s[5]].join(', ');
+      if(z==='PB' && s[2]==='02') return nom+'cajón, '+[s[1],s[2],s[3],s[4],s[5]].join(', ');
       // Rack: tal cual está en el sistema (calle, lado, fila, altura y letra), sin la posición final
-      return nom+', rack, '+[s[1],s[2],s[3],s[4],s[5]].join(', ');
+      return nom+'rack, '+[s[1],s[2],s[3],s[4],s[5]].join(', ');
     }
-    return nom+', '+s.slice(1).join(', ');
+    return nom+s.slice(1).join(', ');
   }
   function buscarProd(cod){
     let p=null;
@@ -8061,10 +8062,18 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     zs.forEach(z=>{ const b=document.createElement('button'); b.type='button'; b.textContent=(ZONA_HABLADA[z]||z)+' ('+z+')'; b.onclick=()=>procesar([ZONA_HABLADA[z]||z],true); zonasEl.appendChild(b); });
   }
 
-  async function leerZona(z){
-    const m=zonasDe(prod), lista=m[z]||[];
-    const partes=lista.map(u=>'Ubicación '+ubicHablada(u));
-    await hablar((lista.length>1?lista.length+' ubicaciones en '+(ZONA_HABLADA[z]||z)+'. ':'')+partes.join('. ')+'. ¿Otra ubicación o otro código?');
+  let pag=null;   // {z, lista, idx}: para zonas con muchas ubicaciones (se leen de a 5)
+  const POR_PAG=5;
+  async function leerZona(z, desde){
+    const m=zonasDe(prod), lista=m[z]||[], ini=desde||0, fin=Math.min(lista.length, ini+POR_PAG);
+    const partes=lista.slice(ini,fin).map((u,k)=> k===0 ? 'Ubicación '+ubicHablada(u) : ubicHablada(u,true));
+    let t='';
+    if(!ini && lista.length>POR_PAG) t=lista.length+' ubicaciones en '+(ZONA_HABLADA[z]||z)+'. Te leo de a '+POR_PAG+'. ';
+    else if(!ini && lista.length>1) t=lista.length+' ubicaciones en '+(ZONA_HABLADA[z]||z)+'. ';
+    t+=partes.join('. ')+'. ';
+    if(fin<lista.length){ pag={z,lista,idx:fin}; t+='Quedan '+(lista.length-fin)+' más. Di siguiente para continuar, o dime otra ubicación o código.'; }
+    else { pag=null; t+='¿Otra ubicación o otro código?'; }
+    await hablar(t);
   }
 
   async function procesar(alts, manual){
@@ -8075,18 +8084,19 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
       cancelar=true; if(corriendo||!manual) await hablar('Listo. Hasta luego.'); detener(); return;
     }
     if(/\brepet/.test(todo)){ await hablar(ultimoTexto); return; }
+    if(pag && /\b(siguiente|siguientes|mas|continua|continuar|sigue|seguir)\b/.test(todo)){ await leerZona(pag.z, pag.idx); return; }
     // ¿viene un código? (se prefiere la alternativa con más dígitos)
     const cods=textos.map(extraerCodigo).filter(c=>c.length>=3).sort((a,b)=>b.length-a.length);
     if(cods.length){
       const cod=cods[0], p=buscarProd(cod);
       if(!p){ prod=null; pintarZonas(); await hablar('No encontré el código '+cod.split('').join(' ')+'. Dime otro código.'); return; }
-      prod=p; pintarZonas();
+      prod=p; pag=null; pintarZonas();
       try{ const s=$('search'); if(s){ s.value=p.cod; window.q=p.cod; if(typeof q!=='undefined') q=p.cod; render(); } }catch(e){}
       const m=zonasDe(p), zs=ORDEN.filter(z=>m[z]).concat(Object.keys(m).filter(z=>!ORDEN.includes(z)));
       let t='Código '+p.cod.split('').join(' ')+'. '+p.desc+'. '+(p.marca?'Marca '+p.marca+'. ':'');
       if(!zs.length){ await hablar(t+'No tiene ubicaciones registradas. Dime otro código.'); return; }
       if(zs.length===1){ await hablar(t+'Tiene ubicación solo en '+(ZONA_HABLADA[zs[0]]||zs[0])+'.'); await leerZona(zs[0]); return; }
-      await hablar(t+'Tiene ubicación en '+zs.map(z=>ZONA_HABLADA[z]||z).join(', ')+'. ¿Qué ubicación necesitas?');
+      await hablar(t+'Tiene ubicación en '+zs.map(z=>(ZONA_HABLADA[z]||z)+(m[z].length>POR_PAG?', '+m[z].length+' ubicaciones':'')).join(', ')+'. ¿Qué ubicación necesitas?');
       return;
     }
     if(prod){
@@ -8130,7 +8140,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   micBtn.onclick=()=>{ corriendo ? detener() : sesion(); };
   function manual(){ const v=inEl.value.trim(); if(!v) return; inEl.value=''; procesar([v],true); }
   $('voz-go').onclick=manual; inEl.addEventListener('keydown',e=>{ if(e.key==='Enter') manual(); });
-  $('voz-nota').textContent = 'Versión 18-11 00:55 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
+  $('voz-nota').textContent = 'Versión 18-11 01:15 · ' + (SR ? 'Necesita internet y permiso de micrófono.' : 'Este navegador no reconoce voz: usa el campo de texto (la voz de respuesta sí funciona).');
   window.vozAsistente={procesar,sesion,detener,_estado:()=>({prod,corriendo})};
 })();
 </script>
