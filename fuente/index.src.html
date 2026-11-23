@@ -8285,7 +8285,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   }
   function pintarZonas(){
     zonasEl.innerHTML='';
-    if(modo==='conf'){
+    if(modo==='conf'||modo==='np_conf'||(modo==='np_desc'&&np&&np.desc)){
       const ok=document.createElement('button'); ok.type='button'; ok.textContent='✅ Confirmar'; ok.onclick=()=>entrada(['sí']);
       const no=document.createElement('button'); no.type='button'; no.textContent='❌ Cancelar'; no.onclick=()=>entrada(['cancelar']);
       zonasEl.appendChild(ok); zonasEl.appendChild(no); return;
@@ -8374,7 +8374,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
 
 
   // ══════ Mover ubicación por voz (con confirmación) ══════
-  let modo=null, mv=null;   // modo: 'zona' | 'num' | 'nueva' | 'conf'
+  let modo=null, mv=null, np=null;   // modo: 'zona' | 'num' | 'nueva' | 'conf' | 'np_cod' | 'np_desc' | 'np_ubic' | 'np_conf'
   const UNI={cero:0,un:1,uno:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,veinte:20,veintiun:21,veintiuno:21,veintidos:22,veintitres:23,veinticuatro:24,veinticinco:25,veintiseis:26,veintisiete:27,veintiocho:28,veintinueve:29,treinta:30,cuarenta:40,cincuenta:50};
   const LETRAS={a:'A',b:'B',be:'B',c:'C',ce:'C',se:'C',d:'D',de:'D'};
   const p2=n=>String(n).padStart(2,'0');
@@ -8433,7 +8433,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
   }
   const dime='Dime calle, lado, fila, altura y letra. Por ejemplo: calle 5, lado 1, fila 28, altura 1, letra A.';
   function esperarEscaneo(on){ try{ if(on){ inEl.inputMode='none'; inEl.placeholder='Escanea la ubicación nueva…'; inEl.focus(); } else { inEl.inputMode='numeric'; inEl.placeholder='Escribe un código...'; } }catch(e){} }
-  function mvLimpiar(){ modo=null; mv=null; esperarEscaneo(false); pintarZonas(); }
+  function mvLimpiar(){ modo=null; mv=null; np=null; esperarEscaneo(false); pintarZonas(); }
   async function mvIniciar(){
     if(!prod){ await hablar('Primero dime el código del producto.'); return; }
     if(!window._loggedUser){ await hablar('Necesito que hayas iniciado sesión para registrar el cambio.'); return; }
@@ -8475,11 +8475,85 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     try{ render(); renderModHistory(); }catch(e){}
     await hablar('Listo. Ubicación cambiada y registrada a nombre de '+usuarioHablado(user)+'. Ahora está en '+ubicHablada(nueva)+'. ¿Otro código?');
   }
+
+  // ── Nuevo producto por voz: código → descripción (catálogo) → ubicación → confirmar → guardar y sincronizar ──
+  const dig=c=>String(c).split('').join(' ');
+  const esSi=textos=>textos.some(t=>/\b(si|sí|confirmo|confirmado|confirmar|dale|ok|okey|correcto|correcta|de acuerdo|adelante|esta bien|esa)\b/.test(norm(t)));
+  const esNo=textos=>textos.some(t=>/^(no|nop|negativo|incorrecto|incorrecta|otra|cambiar|corregir)\b/.test(norm(t)));
+  async function npIniciar(){
+    if(!window._loggedUser){ await hablar('Necesito que hayas iniciado sesión para registrar un producto nuevo.'); return; }
+    prod=null; pag=null; mv=null; np={}; modo='np_cod'; pintarZonas();
+    try{ inEl.placeholder='Escanea o escribe el código…'; inEl.focus(); }catch(e){}
+    await hablar('Nuevo producto. Dime el código, o escanéalo con el lector.');
+  }
+  async function npDescripcion(){
+    modo='np_desc'; pintarZonas();
+    if(np.desc){ await hablar('Código '+dig(np.cod)+'. Descripción: '+np.desc+'. '+(np.marca?'Marca '+np.marca+'. ':'')+'¿Es correcta? Di sí, o dime la descripción correcta.'); }
+    else { await hablar('Código '+dig(np.cod)+'. No está en el catálogo. Dime la descripción del producto, o escríbela abajo.'); }
+  }
+  async function npUbicacion(){
+    modo='np_ubic'; pintarZonas(); esperarEscaneo(true);
+    await hablar('¿En qué ubicación va? Escanea la etiqueta de la ubicación con el lector, o dímela con la zona. Por ejemplo: Picking Baja, calle 1, lado 1, fila 7, altura 4, letra A.');
+  }
+  async function npConfirmar(){
+    const otros=DATA.filter(d=>String(d.ubic||'').split(',').some(u=>u.trim().toUpperCase()===np.ubic)).length;
+    modo='np_conf'; esperarEscaneo(false); pintarZonas();
+    await hablar('Confirmo: nuevo producto, código '+dig(np.cod)+', '+np.desc+', en '+ubicHablada(np.ubic)+'. '+(otros?'Ojo: en esa ubicación ya hay '+otros+(otros===1?' producto. ':' productos. '):'')+'¿Confirmas? Di sí o no.');
+  }
+  async function npAplicar(){
+    const user=String(window._loggedUser||'').trim().toUpperCase(), cod=np.cod, desc=np.desc, ubic=np.ubic;
+    if(DATA.some(d=>d.cod===cod)){ mvLimpiar(); await hablar('Ese código ya existe, no lo creé de nuevo.'); return; }
+    const partes=ubic.split('-'), barras=[cod];
+    const nuevoProd={ cod, desc, calle:partes[1]||'', dep:partes[5]||'', ubic, marca:np.marca||'', stock:0, barras, vcto:'', tieneVz:'N' };
+    if(np.vida) nuevoProd.vidaUtil=np.vida;
+    registrarProductoNuevo(nuevoProd);
+    window.encolarCambio(cod, desc, '—', ubic, user, 'nuevo', { barras, marca:nuevoProd.marca||'', vidaUtil:nuevoProd.vidaUtil||null });
+    try{ window._histFlush && window._histFlush(); }catch(e){}
+    const now=getOfficialNow(), hist=JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
+    hist.unshift({ ts:now.toLocaleString('es-CL'), _tsRaw:now.toISOString(), tipo:'🆕 Nuevo Producto', cod, desc, de:'—', a:ubic, user });
+    if(hist.length>5000) hist.pop();
+    localStorage.setItem('dimerc_hist', JSON.stringify(hist));
+    prod=buscarProd(cod); mvLimpiar();
+    try{ const sb=$('search'); if(sb){ sb.value=cod; window.q=cod; if(typeof q!=='undefined') q=cod; } render(); renderModHistory(); }catch(e){}
+    await hablar('Listo. Producto nuevo creado y registrado a nombre de '+usuarioHablado(user)+'. Ya está en el buscador y en el historial de modificaciones. ¿Otro código?');
+  }
+  async function procesarNuevo(textos){
+    if(modo==='np_cod'){
+      const cods=textos.map(extraerCodigo).filter(c=>c.length>=3).sort((a,b)=>b.length-a.length);
+      if(!cods.length){ await hablar('No entendí el código. Dímelo número por número, o escanéalo.'); return; }
+      const cod=cods[0];
+      if(buscarProd(cod)||BIDX[cod]){ mvLimpiar(); prod=buscarProd(cod); await hablar('Ese código ya existe: '+(prod?prod.desc+'. ':'')+'No lo creé de nuevo. Si quieres moverlo, di cambiar ubicación.'); return; }
+      const ref=(typeof nuevoRef==='function')?nuevoRef(cod):null;
+      np={ cod, desc:(ref&&ref.desc)||'', marca:(ref&&ref.marca)||'', vida:(ref&&ref.vida)||null };
+      await npDescripcion(); return;
+    }
+    if(modo==='np_desc'){
+      if(np.desc && esSi(textos)){ await npUbicacion(); return; }
+      if(np.desc && esNo(textos)){ np.desc=''; np.vida=null; await hablar('Dime la descripción correcta, o escríbela abajo.'); return; }
+      const t=String(textos[0]||'').trim();
+      if(t.length<3){ await hablar('No entendí la descripción. Repítela, por favor.'); return; }
+      np.desc=t.toUpperCase(); await npDescripcion(); return;
+    }
+    if(modo==='np_ubic'){
+      let esc=null; for(const t of textos){ esc=ubicEscaneada(t); if(esc) break; }
+      let r=esc?{ubic:esc}:null;
+      if(!r){ let z=null; for(const t of textos){ z=zonaNombrada(t); if(z) break; } if(z) r=interpretarUbic(textos,z); }
+      if(!r){ await hablar('No entendí la ubicación. Escanea la etiqueta con el lector, o dime zona, calle, lado, fila, altura y letra.'); return; }
+      np.ubic=r.ubic.toUpperCase(); await npConfirmar(); return;
+    }
+    if(modo==='np_conf'){
+      if(esSi(textos)){ await npAplicar(); return; }
+      if(esNo(textos)){ mvLimpiar(); await hablar('Cancelado. No creé nada. Dime otro código o di nuevo producto.'); return; }
+      await hablar('No te entendí. Di sí para confirmar o no para cancelar.'); return;
+    }
+  }
+
   async function procesarMov(textos){
     const todo=textos.map(norm).join(' | ');
     if(/\b(cancelar|cancela|olvidalo|dejalo|no gracias|abortar)\b/.test(todo) || (modo==='conf' && textos.some(t=>/^(no|nop|negativo)$/.test(norm(t))))){
       mvLimpiar(); await hablar('Cancelado. No cambié nada. Dime otro código o una ubicación.'); return;
     }
+    if(modo&&modo.indexOf('np_')===0){ await procesarNuevo(textos); return; }
     if(modo==='zona'){
       const zs=Object.keys(zonasDe(prod)); let z=null;
       for(const t of textos){ z=zonaDe(t,zs)||(zs.includes(zonaNombrada(t))?zonaNombrada(t):null); if(z) break; }
@@ -8515,6 +8589,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
       cancelar=true; if(corriendo||!manual) await hablar('Listo. Hasta luego.'); detener(); return;
     }
     if(/\brepet/.test(todo)){ await hablar(ultimoTexto); return; }
+    if(/(nuevo producto|producto nuevo|agregar (un )?producto|crear (un )?producto|agregar nuevo|anadir (un )?producto)/.test(todo)){ await npIniciar(); return; }
     if(!extraerCodigo(textos[0]) && /(\bmover\b|\bmuevo\b|cambiar (la )?ubicacion|cambio de ubicacion|reubicar|modificar (la )?ubicacion|\bcambiar\b)/.test(todo)){ await mvIniciar(); return; }
     if(prod && /(trazabilidad|ultima modificacion|ultimo cambio|ubicacion anterior|que se modifico|cuando se modifico)/.test(todo)){ const tz=trazaTexto(prod); await hablar(tz.texto, tz.voz); return; }
     if(pag && /\b(siguiente|siguientes|mas|continua|continuar|sigue|seguir)\b/.test(todo)){ await leerZona(pag.z, pag.idx); return; }
@@ -8567,7 +8642,7 @@ body.locked #voz-fab,body.locked #voz-panel{display:none!important}
     detener();
   }
   function detener(){
-    modo=null; mv=null; corriendo=false; tokenSes++; try{ rec&&(rec.onend=null,rec.stop()); }catch(e){} try{ TTS&&TTS.cancel(); }catch(e){}
+    modo=null; mv=null; np=null; corriendo=false; tokenSes++; try{ rec&&(rec.onend=null,rec.stop()); }catch(e){} try{ TTS&&TTS.cancel(); }catch(e){}
     fab.classList.remove('on'); micBtn.classList.remove('on'); micBtn.textContent='🎙️ Hablar'; estado('En pausa','');
   }
 
