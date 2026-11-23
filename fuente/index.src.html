@@ -1451,6 +1451,7 @@ function registrarProductoNuevo(prod, opts){
     bidxIndexar(ex);
   } else {
     DATA.push(prod); bidxIndexar(DATA.length-1);
+    try { if (window.refrescarApp) window.refrescarApp(); } catch(e) {}
   }
   if(opts.persistir !== false){
     const c = nuevosCacheGet(), k = c.findIndex(x => x && x.cod === prod.cod);
@@ -2611,7 +2612,7 @@ function histTipoExport(h) {
 // ── Rango de fechas del historial ──
 function histParseTs(h) {
   if (h._tsRaw) { const d = new Date(h._tsRaw); if (!isNaN(d)) return d; }
-  const m = String(h.ts||'').match(/(\d{1,2})-(\d{1,2})-(\d{4}),?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  const m = String(h.ts||'').match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}),?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
   if (m) return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], +(m[6]||0));
   return null;
 }
@@ -2774,7 +2775,7 @@ function exportHistoryPDF() {
   // Fecha corta: dd-mm-aaaa hh:mm
   const shortDate = (s) => {
     if(!s) return '';
-    const m = s.match(/(\d{1,2})-(\d{1,2})-(\d{4}),?\s*(\d{1,2}):(\d{2})/);
+    const m = s.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}),?\s*(\d{1,2}):(\d{2})/);
     if(m) return `${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}-${m[3]} ${m[4].padStart(2,'0')}:${m[5]}`;
     return s;
   };
@@ -2897,7 +2898,7 @@ function nuevoProductoSave() {
   window.encolarCambio(cod, desc, '—', ubic, user, 'nuevo', { barras, marca: nuevoProd.marca || '', vidaUtil: nuevoProd.vidaUtil || null });
 
   const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
-  hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo:'🆕 Nuevo Producto', cod: cod, desc: desc, de: '—', a: ubic, user: user });
+  hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), _tsRaw: getOfficialNow().toISOString(), tipo:'🆕 Nuevo Producto', cod: cod, desc: desc, de: '—', a: ubic, user: user });
   if(hist.length>5000) hist.pop();
   localStorage.setItem('dimerc_hist', JSON.stringify(hist));
 
@@ -4388,7 +4389,7 @@ function exportVctoPDF() {
 
   const shortDate = (s) => {
     if(!s) return '';
-    const m = s.match(/(\d{1,2})-(\d{1,2})-(\d{4}),?\s*(\d{1,2}):(\d{2})/);
+    const m = s.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}),?\s*(\d{1,2}):(\d{2})/);
     if(m) return `${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}-${m[3]} ${m[4].padStart(2,'0')}:${m[5]}`;
     return s;
   };
@@ -4716,6 +4717,16 @@ window.addEventListener('online', () => { try { window.flushCambiosPend(); } cat
 setInterval(() => { try { window.flushCambiosPend(); } catch(e) {} }, 15000);
 
 // Tras cualquier cambio de datos (render): refresca el mapa si está abierto y mantiene la copia local de productos nuevos
+// Refresca todo lo que depende de DATA (buscador, ubicación, mapa, historial) tras agregar un producto nuevo
+window.refrescarApp = function() {
+  clearTimeout(window._refT);
+  window._refT = setTimeout(function() {
+    try { render(); } catch(e) {}
+    try { if (ubicInp && ubicInp.value.trim().length >= 5) searchUbicacion(ubicInp.value.trim().toUpperCase()); } catch(e) {}
+    try { const sm = document.getElementById('section-mapa'); if (sm && sm.style.display !== 'none' && typeof renderMapaVirtual === 'function') renderMapaVirtual(); } catch(e) {}
+    try { renderModHistory(); } catch(e) {}
+  }, 150);
+};
 let _postRenderT = null;
 function _postRender() {
   clearTimeout(_postRenderT);
