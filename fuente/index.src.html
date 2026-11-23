@@ -1407,6 +1407,7 @@ body.locked #section-produccion{display:none!important}
         <div id="hist-range-info" style="font-size:12px;color:#7d8590;margin-top:6px"></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="mod-back-btn" onclick="sincronizarAhora(this)">🔄 Sincronizar ahora</button>
         <button class="mod-back-btn" onclick="exportHistoryExcel()">📊 Exportar Excel</button>
         <button class="mod-back-btn" onclick="exportHistoryPDF()">📄 Exportar PDF</button>
         <button class="mod-back-btn" onclick="modClearHistory()">🧹 Limpiar pantalla</button>
@@ -2746,7 +2747,30 @@ function histResumen(rows) {
   return lineas;
 }
 
-function exportHistoryExcel() {
+// Antes de exportar se sincroniza con la base (envía lo pendiente y trae lo que falte) para que el archivo salga completo
+function _sincronizarYEjecutar(fn) {
+  let hecho = false;
+  const ir = function() { if (hecho) return; hecho = true; try { fn(); } catch(e) { console.error('export falló', e); alert('No se pudo exportar: ' + e.message); } };
+  try {
+    if (window.sincronizarHistorial) { window.sincronizarHistorial().then(ir, ir); setTimeout(ir, 6000); return; }
+  } catch(e) {}
+  ir();
+}
+function exportHistoryExcel() { _sincronizarYEjecutar(_exportHistoryExcel); }
+function exportHistoryPDF() { _sincronizarYEjecutar(_exportHistoryPDF); }
+function sincronizarAhora(btn) {
+  const t0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sincronizando…'; }
+  const fin = function(r) {
+    if (btn) { btn.disabled = false; btn.textContent = t0; }
+    try { renderModHistory(); } catch(e) {}
+    alert(r ? ('Sincronizado.\nEnviados a la base: ' + r.enviados + '\nRecibidos de la base: ' + r.recibidos + '\nPendientes por enviar: ' + r.pendientes) : 'Sin conexión con la base: no se pudo sincronizar. Los cambios quedan guardados y se enviarán solos al volver la señal.');
+  };
+  if (!window.sincronizarHistorial) { fin(null); return; }
+  let listo = false; const f = r => { if (!listo) { listo = true; fin(r); } };
+  window.sincronizarHistorial().then(f, () => f(null)); setTimeout(() => f(null), 12000);
+}
+function _exportHistoryExcel() {
   const _r = histGetRange();
   if (_r.desde && _r.hasta && _r.desde > _r.hasta) { alert('El rango de fechas no es válido: "Desde" es posterior a "Hasta".'); return; }
   const rows = getHistoryRows();
@@ -2766,7 +2790,7 @@ function exportHistoryExcel() {
   XLSX.writeFile(wb, `${_m.nombre}(${histRangeLabel().replace(/:/g,'-').replace(/ (al|a) /g,'_$1_').replace(/\s+/g,'_')}).xlsx`);
 }
 
-function exportHistoryPDF() {
+function _exportHistoryPDF() {
   const _r = histGetRange();
   if (_r.desde && _r.hasta && _r.desde > _r.hasta) { alert('El rango de fechas no es válido: "Desde" es posterior a "Hasta".'); return; }
   const rows = getHistoryRows();
@@ -4691,6 +4715,44 @@ function _setupFirebase() {
       });
     };
     setTimeout(function() { try { window.repararHistorial(); } catch(e) {} }, 6000);
+
+    // Sincronización completa a demanda: envía lo pendiente y trae TODO lo que la base tenga y este equipo no
+    window.sincronizarHistorial = function() {
+      return new Promise(function(resolve, reject) {
+        if (!window._fbReady) { reject(new Error('sin conexión')); return; }
+        window.repararHistorial().then(function(enviados) {
+          try { window.flushCambiosPend(); } catch(e) {}
+          cambRef.once('value', function(snap) {
+            let recibidos = 0;
+            try {
+              const todo = snap.val() || {}, claves = {};
+              try { _histFlush(); } catch(e) {}
+              JSON.parse(localStorage.getItem('dimerc_hist') || '[]').forEach(function(h) { const dd = histParseTs(h); (claves[h.cod] = claves[h.cod] || []).push({ t: dd ? dd.getTime() : 0, a: String(h.a||'').toUpperCase(), de: String(h.de||'').toUpperCase() }); });
+              Object.keys(todo).forEach(function(id) {
+                const d = todo[id]; if (!d || !d.cod || !d.ts) return;
+                if (new Date(d.ts).getTime() < _fbBaseTs) return;
+                if (d.tipo !== 'ubic' && d.tipo !== 'nuevo' && d.tipo !== 'stock') return;
+                const tt = new Date(d.ts).getTime(), aa = String(d.a||'').toUpperCase(), dde = String(d.de||'').toUpperCase();
+                const lst = (claves[d.cod] = claves[d.cod] || []);
+                if (lst.some(function(x) { return x.a === aa && x.de === dde && Math.abs(x.t - tt) < 180000; })) return;
+                lst.push({ t: tt, a: aa, de: dde }); recibidos++;
+                if (d.tipo === 'nuevo') {
+                  if (!DATA.some(function(p) { return p.cod === d.cod; })) {
+                    const np = { cod: d.cod, desc: d.desc, calle: (d.a||'').split('-')[1] || '', dep: (d.a||'').split('-')[5] || '', ubic: d.a, marca: d.marca || '', stock: 0, barras: (Array.isArray(d.barras) && d.barras.length) ? d.barras : [d.cod], vcto: '', tieneVz: 'N' };
+                    if (d.vidaUtil) np.vidaUtil = d.vidaUtil;
+                    registrarProductoNuevo(np);
+                  }
+                }
+                const tipoTxt = d.tipo === 'ubic' ? '📍 Ubicación' : (d.tipo === 'stock' ? '📦 Stock' : '🆕 Nuevo Producto');
+                guardarEnHistorialLocal('dimerc_hist', { ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, tipo: tipoTxt, cod: d.cod, desc: d.desc, de: d.de, a: d.a, user: d.user });
+              });
+              _histFlush();
+            } catch(e) { console.error('sincronizarHistorial falló', e); }
+            resolve({ enviados: enviados || 0, recibidos: recibidos, pendientes: _pendGet().length });
+          }, function(err) { reject(err); });
+        }, reject);
+      });
+    };
 
   } catch(e) {
     console.error('❌ Firebase setup error:', e);
