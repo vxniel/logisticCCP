@@ -2994,7 +2994,9 @@ function nuevoProductoSave() {
       <div class="mod-step-label" id="consec-titulo">📦 Consecutivo</div>
       <div class="mod-step-desc" style="margin:8px 0 6px">📅 Fecha</div>
       <div class="sbox"><span class="sico">📅</span><input id="consec-fecha" type="date"/></div>
-      <div class="mod-step-desc" style="margin:10px 0 6px">Consecutivos de esa fecha (toca uno para verlo)</div>
+      <div class="mod-step-desc" style="margin:10px 0 6px">👤 Usuario</div>
+      <select id="consec-user-sel" style="width:100%;padding:12px;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:16px"></select>
+      <div class="mod-step-desc" style="margin:10px 0 6px">Consecutivos (toca uno para verlo)</div>
       <div id="consec-chips" style="display:flex;flex-wrap:wrap"></div>
       <button class="mod-back-btn" id="consec-nuevo-btn" style="margin-top:6px" onclick="consecNuevo()">➕ Nuevo consecutivo</button>
     </div>
@@ -3029,7 +3031,7 @@ function nuevoProductoSave() {
       </div>
       <div id="consec-items-list" style="display:flex;flex-direction:column;gap:7px"></div>
 
-      <div style="margin-top:14px">
+      <div style="margin-top:14px;display:none">
         <div class="mod-step-desc" style="margin-bottom:6px">Usuario que realiza el consecutivo</div>
         <div class="lfield">
           <span class="lico">👤</span>
@@ -3038,8 +3040,8 @@ function nuevoProductoSave() {
       </div>
 
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        <button class="mod-back-btn" onclick="exportConsecExcel()">📊 Exportar Excel (fecha)</button>
-        <button class="mod-back-btn" onclick="exportConsecPDF()">📄 Exportar PDF (fecha)</button>
+        <button class="mod-back-btn" onclick="exportConsecExcel()">📊 Exportar Excel (fecha y usuario)</button>
+        <button class="mod-back-btn" onclick="exportConsecPDF()">📄 Exportar PDF (fecha y usuario)</button>
         <button class="mod-back-btn" onclick="consecClearList()">🗑 Limpiar este consecutivo</button>
       </div>
     </div>
@@ -3673,16 +3675,19 @@ function nuevoProductoSave() {
 let consecStream = null, consecScanTimer = null, consecLastCode = '';
 let consecCurrentProduct = null;
 
-// ── Consecutivos por fecha: cada ítem guarda fecha (AAAA-MM-DD) y n° de consecutivo del día ──
+// ── Consecutivos en línea, por fecha y por usuario. Cada ítem: id (Firebase), user, fecha (AAAA-MM-DD), n (N° de consecutivo del usuario ese día)
 function consecHoyKey() { const d = getOfficialNow(); return histYMD(d); }
 function consecFmtFecha(k) { const [y,m,d] = String(k).split('-'); return d + '/' + m + '/' + String(y).slice(2); }
 function consecNombre(k, n) { return 'Consecutivo ' + consecFmtFecha(k) + ' (' + n + ')'; }
+function consecYo() { return String(window._loggedUser || '').trim().toUpperCase(); }
 function consecAll() {
   let all; try { all = JSON.parse(localStorage.getItem('dimerc_consec') || '[]'); } catch(e) { all = []; }
   let cambio = false;
   all.forEach(function(it) {
     if (!it.fecha) { const d = histParseTs(it); it.fecha = histYMD(d || getOfficialNow()); cambio = true; }
     if (!it.n) { it.n = 1; cambio = true; }
+    if (!it.user) { if (!consecYo()) return; it.user = consecYo(); it._pend = 1; cambio = true; }   // lo antiguo sin dueño pasa al primer usuario que entra
+    if (!it.id) { it.id = 'l_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); it._pend = 1; cambio = true; }
   });
   if (cambio) localStorage.setItem('dimerc_consec', JSON.stringify(all));
   return all;
@@ -3690,26 +3695,68 @@ function consecAll() {
 function consecSetAll(all) { localStorage.setItem('dimerc_consec', JSON.stringify(all)); }
 function consecMeta() { try { return JSON.parse(localStorage.getItem('dimerc_consec_meta') || '{}'); } catch(e) { return {}; } }
 function consecMetaSet(m) { localStorage.setItem('dimerc_consec_meta', JSON.stringify(m)); }
-function consecNums(fecha) {
-  const set = {}; consecAll().forEach(function(it) { if (it.fecha === fecha) set[it.n] = 1; });
-  const mx = consecMeta()[fecha] || 0; for (let i = 1; i <= mx; i++) set[i] = 1;
+function consecNums(fecha, user) {
+  const set = {}; consecAll().forEach(function(it) { if (it.fecha === fecha && it.user === user) set[it.n] = 1; });
+  const mx = consecMeta()[fecha + '|' + user] || 0; for (let i = 1; i <= mx; i++) set[i] = 1;
   return Object.keys(set).map(Number).sort(function(a, b) { return a - b; });
 }
-let consecSel = { fecha: null, n: 1 };
+let consecSel = { fecha: null, user: null, n: 1 };   // user '*' = todos
 function consecFechaEl() { return document.getElementById('consec-fecha'); }
+function consecUltimo() { const ns = consecSel.user === '*' ? [] : consecNums(consecSel.fecha, consecSel.user); consecSel.n = ns.length ? ns[ns.length - 1] : 1; }
 function consecInit() {
   const el = consecFechaEl(); if (!el) return;
-  el.onchange = function() { consecSel.fecha = el.value || consecHoyKey(); const ns = consecNums(consecSel.fecha); consecSel.n = ns.length ? ns[ns.length - 1] : 1; renderConsecList(); };
-  if (!consecSel.fecha || !el.value) { consecSel.fecha = consecHoyKey(); el.value = consecSel.fecha; const ns = consecNums(consecSel.fecha); consecSel.n = ns.length ? ns[ns.length - 1] : 1; }
+  el.onchange = function() { consecSel.fecha = el.value || consecHoyKey(); consecUltimo(); renderConsecList(); };
+  const us = document.getElementById('consec-user-sel'); if (us) us.onchange = function() { consecSel.user = us.value; consecUltimo(); renderConsecList(); };
+  if (!consecSel.fecha || !el.value) { consecSel.fecha = consecHoyKey(); el.value = consecSel.fecha; }
+  if (!consecSel.user) { consecSel.user = consecYo() || '*'; consecUltimo(); }
 }
 function consecNuevo() {
-  if (consecSel.fecha !== consecHoyKey()) { alert('Solo puedes crear un consecutivo nuevo en la fecha de hoy.'); return; }
-  const ns = consecNums(consecSel.fecha), sig = (ns.length ? ns[ns.length - 1] : 0) + 1;
-  const m = consecMeta(); m[consecSel.fecha] = sig; consecMetaSet(m);
+  if (consecSel.fecha !== consecHoyKey() || consecSel.user !== consecYo()) { alert('Solo puedes crear consecutivos nuevos a tu nombre y en la fecha de hoy.'); return; }
+  const ns = consecNums(consecSel.fecha, consecSel.user), sig = (ns.length ? ns[ns.length - 1] : 0) + 1;
+  const m = consecMeta(); m[consecSel.fecha + '|' + consecSel.user] = sig; consecMetaSet(m);
   consecSel.n = sig; renderConsecList();
 }
 function consecElegir(n) { consecSel.n = n; renderConsecList(); }
-function getConsecList() { return consecAll().filter(function(it) { return it.fecha === consecSel.fecha && it.n === consecSel.n; }); }
+function consecDeSel(it) { return it.fecha === consecSel.fecha && it.n === consecSel.n && it.user === consecSel.user; }
+function getConsecList() { return consecAll().filter(consecDeSel); }
+
+// Sincronización en línea (Firebase): se envían los ítems pendientes y se reciben los de los demás en tiempo real
+window.consecEnviarPend = function() {
+  if (!(window._db && window._fbReady)) return;
+  const all = consecAll(), envios = [];
+  all.forEach(function(it) {
+    if (!it._pend || it._enviando) return;
+    const ref = String(it.id).indexOf('l_') === 0 ? window._db.ref('consecutivos').push() : window._db.ref('consecutivos/' + it.id);
+    it.id = ref.key; envios.push({ ref: ref, copia: (function() { const c = Object.assign({}, it); delete c._pend; return c; })() });
+  });
+  if (!envios.length) return;
+  consecSetAll(all);   // primero se guarda el id nuevo; así el eco de Firebase no duplica
+  envios.forEach(function(e) {
+    e.ref.set(e.copia).then(function() { const a2 = consecAll(); a2.forEach(function(x) { if (x.id === e.copia.id) delete x._pend; }); consecSetAll(a2); }).catch(function(err) { console.error('consecutivo no enviado', err); });
+  });
+};
+window.consecIniciarFB = function(db) {
+  const ref = db.ref('consecutivos');
+  ref.on('child_added', function(snap) {
+    const d = snap.val(); if (!d) return; d.id = snap.key;
+    const all = consecAll();
+    if (all.some(function(x) { return x.id === d.id; })) return;
+    all.push(d); consecSetAll(all); consecRefrescar();
+  });
+  ref.on('child_removed', function(snap) {
+    consecSetAll(consecAll().filter(function(x) { return x.id !== snap.key; })); consecRefrescar();
+  });
+  ref.on('child_changed', function(snap) {
+    const d = snap.val(); if (!d) return; d.id = snap.key;
+    consecSetAll(consecAll().map(function(x) { return x.id === d.id ? d : x; })); consecRefrescar();
+  });
+  window.consecEnviarPend();
+};
+function consecRefrescar() {
+  clearTimeout(window._consecT);
+  window._consecT = setTimeout(function() { try { const s = document.getElementById('section-consec'); if (s && s.style.display !== 'none') renderConsecList(); } catch(e) {} }, 200);
+}
+setInterval(function() { try { window.consecEnviarPend(); } catch(e) {} }, 20000);
 
 const consecCodEl = document.getElementById('consec-cod');
 consecCodEl.addEventListener('input', e => {
@@ -3757,114 +3804,135 @@ function consecSearchProduct(v) {
 
 function consecAddItem() {
   if(!consecCurrentProduct) return;
-  if (consecSel.fecha !== consecHoyKey()) { alert('Estás viendo otra fecha. Vuelve a la fecha de hoy para agregar productos.'); return; }
+  const yo = consecYo();
+  if (!yo) { alert('Inicia sesión para agregar al consecutivo.'); return; }
+  if (consecSel.fecha !== consecHoyKey() || consecSel.user !== yo) { alert('Solo puedes agregar en tu propio consecutivo y en la fecha de hoy.'); return; }
   const qty = parseInt(document.getElementById('consec-qty').value) || 1;
   if(qty < 1) { alert('La cantidad debe ser al menos 1.'); return; }
-  const all = consecAll();
   const now = getOfficialNow();
-  all.push({
-    cod: consecCurrentProduct.cod,
-    desc: consecCurrentProduct.desc,
-    ubic: consecCurrentProduct.ubic || '—',
-    cantidad: qty,
-    ts: now.toLocaleString('es-CL'),
-    _tsRaw: now.toISOString(),
-    fecha: consecSel.fecha,
-    n: consecSel.n
-  });
-  consecSetAll(all);
-  const m = consecMeta(); if ((m[consecSel.fecha] || 0) < consecSel.n) { m[consecSel.fecha] = consecSel.n; consecMetaSet(m); }
-
+  const item = {
+    id: 'l_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    cod: consecCurrentProduct.cod, desc: consecCurrentProduct.desc, ubic: consecCurrentProduct.ubic || '—', cantidad: qty,
+    ts: now.toLocaleString('es-CL'), _tsRaw: now.toISOString(), fecha: consecSel.fecha, n: consecSel.n, user: yo, _pend: 1
+  };
+  const all = consecAll(); all.push(item); consecSetAll(all);
+  const m = consecMeta(), k = consecSel.fecha + '|' + yo; if ((m[k] || 0) < consecSel.n) { m[k] = consecSel.n; consecMetaSet(m); }
+  try { window.consecEnviarPend(); } catch(e) {}
   consecClear();
   renderConsecList();
   consecCodEl.focus();
 }
 
+function consecQuitarPorId(id) {
+  consecSetAll(consecAll().filter(function(it) { return it.id !== id; }));
+  try { if (window._db && window._fbReady && String(id).indexOf('l_') !== 0) window._db.ref('consecutivos/' + id).remove(); } catch(e) {}
+}
 function consecRemoveItem(idx) {
-  const all = consecAll(), act = all.filter(function(it) { return it.fecha === consecSel.fecha && it.n === consecSel.n; });
-  const objetivo = act[idx]; if (!objetivo) return;
-  consecSetAll(all.filter(function(it) { return it !== objetivo && JSON.stringify(it) !== JSON.stringify(objetivo); }));
+  const act = getConsecList(), objetivo = act[idx]; if (!objetivo) return;
+  if (objetivo.user !== consecYo()) { alert('Solo puedes quitar productos de tu propio consecutivo.'); return; }
+  consecQuitarPorId(objetivo.id);
   renderConsecList();
 }
 
 function consecClearList() {
-  if(!confirm('¿Limpiar ' + consecNombre(consecSel.fecha, consecSel.n) + '?')) return;
-  consecSetAll(consecAll().filter(function(it) { return !(it.fecha === consecSel.fecha && it.n === consecSel.n); }));
+  if (consecSel.user !== consecYo()) { alert('Solo puedes limpiar tus propios consecutivos.'); return; }
+  if(!confirm('¿Limpiar ' + consecNombre(consecSel.fecha, consecSel.n) + ' de ' + consecSel.user + '?')) return;
+  getConsecList().forEach(function(it) { consecQuitarPorId(it.id); });
   renderConsecList();
 }
 
 function renderConsecList() {
   consecInit();
-  const list = getConsecList();
+  // Selector de usuario: quienes tienen consecutivos esa fecha + yo
+  const us = document.getElementById('consec-user-sel');
+  if (us) {
+    const set = {}; consecAll().forEach(function(it) { if (it.fecha === consecSel.fecha) set[it.user] = 1; });
+    if (consecYo()) set[consecYo()] = 1;
+    const lista = Object.keys(set).sort();
+    us.innerHTML = '<option value="*">Todos los usuarios</option>' + lista.map(function(u) { return '<option value="' + u + '">' + u + (u === consecYo() ? ' (yo)' : '') + '</option>'; }).join('');
+    if (consecSel.user !== '*' && lista.indexOf(consecSel.user) < 0) { consecSel.user = consecYo() || '*'; }
+    us.value = consecSel.user;
+  }
+  const todos = consecSel.user === '*';
+  const hoy = consecSel.fecha === consecHoyKey(), mio = !todos && consecSel.user === consecYo();
   const listCard = document.getElementById('consec-list-card');
   const emptyCard = document.getElementById('consec-empty-card');
   const itemsList = document.getElementById('consec-items-list');
   const count = document.getElementById('consec-count');
-  // Selector de consecutivos de la fecha
-  const ns = consecNums(consecSel.fecha); if (!ns.length) ns.push(1);
-  if (ns.indexOf(consecSel.n) < 0) consecSel.n = ns[ns.length - 1];
-  const hoy = consecSel.fecha === consecHoyKey();
   const chips = document.getElementById('consec-chips');
-  if (chips) chips.innerHTML = ns.map(function(n) { return '<button type="button" class="jaula-btn ' + (consecSel.n === n ? 'active' : '') + '" style="margin:0 6px 6px 0" onclick="consecElegir(' + n + ')">' + consecNombre(consecSel.fecha, n) + '</button>'; }).join('');
-  const nb = document.getElementById('consec-nuevo-btn'); if (nb) nb.style.display = hoy ? '' : 'none';
-  const addCard = document.getElementById('consec-add-card'); if (addCard) addCard.style.display = hoy ? '' : 'none';
-  const tit = document.getElementById('consec-titulo'); if (tit) tit.textContent = '📦 ' + consecNombre(consecSel.fecha, consecSel.n);
+  let list;
+  if (todos) {
+    list = consecAll().filter(function(it) { return it.fecha === consecSel.fecha; });
+    if (chips) chips.innerHTML = '<span style="color:#7d8590;font-size:12px">Viendo todos los consecutivos de ' + consecFmtFecha(consecSel.fecha) + '</span>';
+  } else {
+    const ns = consecNums(consecSel.fecha, consecSel.user); if (!ns.length) ns.push(1);
+    if (ns.indexOf(consecSel.n) < 0) consecSel.n = ns[ns.length - 1];
+    if (chips) chips.innerHTML = ns.map(function(n) { return '<button type="button" class="jaula-btn ' + (consecSel.n === n ? 'active' : '') + '" style="margin:0 6px 6px 0" onclick="consecElegir(' + n + ')">' + consecNombre(consecSel.fecha, n) + '</button>'; }).join('');
+    list = getConsecList();
+  }
+  const nb = document.getElementById('consec-nuevo-btn'); if (nb) nb.style.display = (hoy && mio) ? '' : 'none';
+  const addCard = document.getElementById('consec-add-card'); if (addCard) addCard.style.display = (hoy && mio) ? '' : 'none';
+  const tit = document.getElementById('consec-titulo'); if (tit) tit.textContent = todos ? ('📦 Consecutivos ' + consecFmtFecha(consecSel.fecha)) : ('📦 ' + consecNombre(consecSel.fecha, consecSel.n) + ' · ' + consecSel.user);
 
+  try { window.consecEnviarPend(); } catch(e) {}
   if(!list.length) {
     listCard.style.display = 'none';
     emptyCard.style.display = 'block';
-    emptyCard.lastChild.textContent = hoy ? 'Aún no has agregado productos a este consecutivo' : 'No hay productos en este consecutivo';
     return;
   }
   listCard.style.display = 'block';
   emptyCard.style.display = 'none';
   count.textContent = list.length + (list.length===1 ? ' producto' : ' productos');
-
+  const yo = consecYo();
   itemsList.innerHTML = list.map((it, i) => `
     <div class="hist-item">
       <div class="hist-item-name">${it.desc}</div>
       <div class="hist-item-sub">Código: <b style="color:#e6edf3">${it.cod}</b> · Ubicación: ${it.ubic} · Cantidad: <b style="color:#3fb950">${it.cantidad}</b></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
-        <div class="hist-item-user" style="margin:0">🕐 ${it.ts}</div>
-        <button onclick="consecRemoveItem(${i})" style="background:none;border:none;color:#f85149;font-size:12px;cursor:pointer;padding:2px 6px">✕ Quitar</button>
+        <div class="hist-item-user" style="margin:0">👤 ${it.user}${todos ? ' · ' + consecNombre(it.fecha, it.n) : ''} · 🕐 ${it.ts}</div>
+        ${(!todos && it.user === yo) ? `<button onclick="consecRemoveItem(${i})" style="background:none;border:none;color:#f85149;font-size:12px;cursor:pointer;padding:2px 6px">✕ Quitar</button>` : ''}
       </div>
     </div>`).join('');
 }
 
-// Filas de la fecha seleccionada, agrupadas por consecutivo
+// Grupos de la fecha (y usuario) seleccionados, uno por consecutivo
 function getConsecGrupos() {
-  const user = (document.getElementById('consec-user').value || '').trim() || '—';
-  const all = consecAll().filter(function(it) { return it.fecha === consecSel.fecha; });
-  const nums = {}; all.forEach(function(it) { nums[it.n] = 1; });
-  return Object.keys(nums).map(Number).sort(function(a, b) { return a - b; }).map(function(n) {
-    return { n: n, nombre: consecNombre(consecSel.fecha, n), rows: all.filter(function(it) { return it.n === n; }).map(function(it) {
-      return { Codigo: it.cod, Producto: it.desc, Cantidad: it.cantidad, Fecha: it.ts, Usuario: user };
+  const todos = consecSel.user === '*';
+  const all = consecAll().filter(function(it) { return it.fecha === consecSel.fecha && (todos || it.user === consecSel.user); });
+  const claves = {}; all.forEach(function(it) { claves[it.user + '\u0001' + it.n] = { user: it.user, n: it.n }; });
+  return Object.keys(claves).map(function(k) { return claves[k]; }).sort(function(a, b) { return a.user < b.user ? -1 : a.user > b.user ? 1 : a.n - b.n; }).map(function(g) {
+    return { n: g.n, user: g.user, nombre: consecNombre(consecSel.fecha, g.n) + (todos ? ' — ' + g.user : ''), rows: all.filter(function(it) { return it.user === g.user && it.n === g.n; }).map(function(it) {
+      return { Codigo: it.cod, Producto: it.desc, Cantidad: it.cantidad, Fecha: it.ts, Usuario: it.user };
     }) };
   });
+}
+function consecArchivo(ext) {
+  const [y, m, d] = consecSel.fecha.split('-');
+  return `Consecutivo(${d}-${m}-${y}${consecSel.user === '*' ? '' : '_' + consecSel.user})${ext}`;
 }
 
 function exportConsecExcel() {
   const grupos = getConsecGrupos();
-  if(!grupos.length) { alert('No hay consecutivos en la fecha ' + consecFmtFecha(consecSel.fecha) + '.'); return; }
-  const wb = XLSX.utils.book_new();
+  if(!grupos.length) { alert('No hay consecutivos para esa fecha y usuario.'); return; }
+  const wb = XLSX.utils.book_new(), usados = {};
   grupos.forEach(function(g) {
     const rows = g.rows.map(function(r) { return Object.assign({ Consecutivo: g.nombre }, r); });
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{wch:26},{wch:12},{wch:45},{wch:10},{wch:20},{wch:14}];
+    ws['!cols'] = [{wch:34},{wch:12},{wch:45},{wch:10},{wch:20},{wch:14}];
     XLSX.utils.sheet_add_aoa(ws, [['By: Vxniel']], { origin: 'A' + (rows.length + 3) });
-    XLSX.utils.book_append_sheet(wb, ws, 'Consec (' + g.n + ')');
+    let nom = (g.user + ' (' + g.n + ')').replace(/[\\/?*\[\]:]/g, '').slice(0, 31); while (usados[nom]) nom = nom.slice(0, 29) + '_' + Math.floor(Math.random() * 9);
+    usados[nom] = 1; XLSX.utils.book_append_sheet(wb, ws, nom);
   });
-  const [y, m, d] = consecSel.fecha.split('-');
-  XLSX.writeFile(wb, `Consecutivo(${d}-${m}-${y}).xlsx`);
+  XLSX.writeFile(wb, consecArchivo('.xlsx'));
 }
 
 function exportConsecPDF() {
   const grupos = getConsecGrupos();
-  if(!grupos.length) { alert('No hay consecutivos en la fecha ' + consecFmtFecha(consecSel.fecha) + '.'); return; }
+  if(!grupos.length) { alert('No hay consecutivos para esa fecha y usuario.'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   doc.setFontSize(14);
-  doc.text('Listado Consecutivo — DCCP · ' + consecFmtFecha(consecSel.fecha), 30, 24);
+  doc.text('Listado Consecutivo — DCCP · ' + consecFmtFecha(consecSel.fecha) + (consecSel.user === '*' ? '' : ' · ' + consecSel.user), 30, 24);
   doc.setFontSize(9);
   doc.text('Generado: ' + getOfficialNow().toLocaleString('es-CL'), 30, 40);
   let y0 = 52;
@@ -3893,8 +3961,7 @@ function exportConsecPDF() {
     doc.setTextColor(120, 120, 120);
     doc.text('By: Vxniel', pageW - 30, pageH - 12, { align: 'right' });
   }
-  const [y, m, d] = consecSel.fecha.split('-');
-  doc.save(`Consecutivo(${d}-${m}-${y}).pdf`);
+  doc.save(consecArchivo('.pdf'));
 }
 
 // ── consec scanner ──
@@ -4736,6 +4803,7 @@ function _setupFirebase() {
 
     window._fbReady = true;
     console.log('✅ Firebase inicializado correctamente');
+    try { window.consecIniciarFB(db); } catch(e) { console.error('consecutivos en línea falló', e); }
     try { window.flushCambiosPend && window.flushCambiosPend(); } catch(e) {}
 
     // ── Reparación del registro: todo cambio de ubicación que quedó solo en el historial LOCAL
