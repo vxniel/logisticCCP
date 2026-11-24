@@ -599,6 +599,7 @@ body.locked #section-produccion{display:none!important}
 .zone-preview{font-size:11px;color:#3fb950;min-height:14px;text-align:center}
 .zones-total{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;margin-top:8px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:3px}
 
+#section-consolidado.consol-ro .consol-nota-del{display:none!important}
 </style>
 <!-- Firebase SDKs -->
 <script>
@@ -1921,10 +1922,18 @@ function irAAsignarNuevo(codigo) {
 
 // ── Permisos: solo estos usuarios tienen todas las funciones; el resto solo las libres ──
 const USUARIOS_COMPLETOS = ['VXNIEL','VURRA','VICTOR URRA','JCHUNG','PSEPULVEDA'];
-const TABS_LIBRES = ['buscar','modif','ubic','vcto','trazabilidad'];   // + asistente virtual (siempre disponible)
+const TABS_LIBRES = ['buscar','modif','ubic','vcto','trazabilidad','consolidado','consec'];   // + asistente virtual (siempre disponible)
 function tabBloqueado(tab) {
   const u = String(window._loggedUser || '').toUpperCase();
   return !USUARIOS_COMPLETOS.includes(u) && !TABS_LIBRES.includes(tab);
+}
+// Consolidado: todos pueden listarlo y exportarlo; solo los usuarios completos registran, quitan o limpian
+function consolSoloLectura() { return !USUARIOS_COMPLETOS.includes(String(window._loggedUser || '').toUpperCase()); }
+function aplicarPermisosConsol() {
+  const ro = consolSoloLectura();
+  document.querySelectorAll('#section-consolidado .consol-edit').forEach(e => { e.style.display = ro ? 'none' : ''; });
+  const sec = document.getElementById('section-consolidado');
+  if (sec) sec.classList.toggle('consol-ro', ro);
 }
 function aplicarPermisos() {
   document.querySelectorAll('#nav-tabs [id^="tab-"]').forEach(b => {
@@ -1975,7 +1984,7 @@ function switchTab(tab) {
   if(tab==='turno') renderTurnoPreview();
   if(tab==='rotacion') renderRotacion();
   if(tab==='mapa') renderMapaVirtual();
-  if(tab==='consolidado') { initConsolFecha(); renderConsolidado(); document.getElementById('consol-input').focus(); }
+  if(tab==='consolidado') { initConsolFecha(); renderConsolidado(); aplicarPermisosConsol(); if (!consolSoloLectura()) document.getElementById('consol-input').focus(); }
   if(tab==='creapallets') { initCPFecha(); renderCP(); document.getElementById('cp-nota').focus(); }
   if(tab==='conteointerno') { initCIFecha(); renderCI(); }
   if(tab==='barcode') { bcReset(); }
@@ -3331,14 +3340,14 @@ function nuevoProductoSave() {
       <div class="mod-step-desc">Cajas: escanea el código (ej: <b style="color:#e6edf3">0138707210002</b> = nota 13870721, caja 2). Pallets cerrados: escanea el código del pallet y elige tú el N° (1, 2, 3...). El total de cada uno se calcula solo, con el número más alto que escanees.</div>
     </div>
 
-    <div class="mod-card">
+    <div class="mod-card consol-edit">
       <div class="mod-step-label">🚛 Jaula de destino</div>
       <div class="mod-step-desc">Elige la jaula antes de escanear las cajas de ese pedido.</div>
       <div id="jaula-selector" style="margin-top:10px"></div>
       <div id="jaula-activa-bar" style="display:none"></div>
     </div>
 
-    <div class="mod-card">
+    <div class="mod-card consol-edit">
       <div id="consol-modo-toggle"></div>
       <div id="consol-pallet-num-wrap" style="display:none;margin-top:10px">
         <div class="mod-step-desc" style="margin-bottom:6px">Código de barra producto</div>
@@ -3368,7 +3377,7 @@ function nuevoProductoSave() {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="mod-back-btn" onclick="exportConsolidadoExcel()">📊 Exportar Excel</button>
       <button class="mod-back-btn" onclick="exportConsolidadoPDF()">📄 Exportar PDF</button>
-      <button class="mod-back-btn" onclick="consolClearDiaClick(this)">🗑️ Limpiar día</button>
+      <button class="mod-back-btn consol-edit" onclick="consolClearDiaClick(this)">🗑️ Limpiar día</button>
     </div>
 
   </div>
@@ -6255,6 +6264,7 @@ function consolMaxNum(items) {
   return nums.length ? Math.max(...nums) : 0;
 }
 function consolAddScan() {
+  if (consolSoloLectura()) return;
   const input = document.getElementById('consol-input');
   const errBox = document.getElementById('consol-input-err');
   errBox.style.display = 'none';
@@ -6334,6 +6344,7 @@ function consolAddScan() {
   input.focus();
 }
 function consolClearDia() {
+  if (consolSoloLectura()) return;
   const data = getConsolData();
   const key = consolFechaKey();
   delete data[key];
@@ -6493,6 +6504,7 @@ function consolQuitarNota(nota) {
 // webview propio) bloquean window.confirm() y lo cancelan solos, así que no
 // usamos confirm() aquí — se confirma tocando el botón dos veces.
 function consolQuitarNotaClick(btn, nota) {
+  if (consolSoloLectura()) return;
   if (btn.dataset.confirmar === '1') {
     consolQuitarNota(nota);
     return;
