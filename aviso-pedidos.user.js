@@ -1,7 +1,9 @@
 // ==UserScript==
 // @name         Aviso de pedidos - Cajas Sin Piqueo
 // @namespace    vxniel
-// @version      1.0
+// @version      1.1
+// @updateURL    https://vxniel.github.io/logisticCCP/aviso-pedidos.user.js
+// @downloadURL  https://vxniel.github.io/logisticCCP/aviso-pedidos.user.js
 // @description  Avisa (pantalla + vibración + pitido) cuando suben los pedidos ALTA / MEDIA / BAJA / VOLUMEN
 // @match        *://*/*
 // @run-at       document-idle
@@ -37,13 +39,18 @@
     return res;
   }
 
+  var ctxAudio = null;
+  function ctx() {
+    try { var C = window.AudioContext || window.webkitAudioContext; if (!C) return null; if (!ctxAudio) ctxAudio = new C(); if (ctxAudio.state === 'suspended' && ctxAudio.resume) ctxAudio.resume(); return ctxAudio; } catch (e) { return null; }
+  }
+  // Los navegadores solo dejan sonar tras un toque del usuario: se "desbloquea" con el primer toque en la página
+  ['touchstart', 'click', 'keydown'].forEach(function (ev) { document.addEventListener(ev, function () { ctx(); }, true); });
   function pitido() {
     try {
-      var C = window.AudioContext || window.webkitAudioContext; if (!C) return;
-      var c = new C(), veces = 3;
+      var c = ctx(); if (!c) return; var veces = 4;
       for (var i = 0; i < veces; i++) {
         var o = c.createOscillator(), g = c.createGain();
-        o.frequency.value = 1000; g.gain.value = 0.4; o.connect(g); g.connect(c.destination);
+        o.type = 'square'; o.frequency.value = 1200; g.gain.value = 1; o.connect(g); g.connect(c.destination);
         o.start(c.currentTime + i * 0.35); o.stop(c.currentTime + i * 0.35 + 0.2);
       }
     } catch (e) {}
@@ -58,6 +65,14 @@
     d.innerHTML = '<div>🔔 NUEVOS PEDIDOS<br><br>' + cambios.join('<br>') + '<br><br><span style="font-size:16px;font-weight:normal">Toca para cerrar</span></div>';
     d.onclick = function () { d.parentNode && d.parentNode.removeChild(d); };
     document.body.appendChild(d);
+  }
+
+  function insignia(texto) {
+    var b = document.createElement('div');
+    b.setAttribute('style', 'position:fixed;left:6px;bottom:6px;z-index:2147483646;background:#0a7d2c;color:#fff;font:bold 13px sans-serif;padding:6px 10px;border-radius:14px;opacity:.9');
+    b.textContent = texto;
+    b.onclick = function () { ctx(); avisar(['PRUEBA: así sonará y se verá el aviso']); };
+    document.body.appendChild(b);
   }
 
   var actual = leer(), hay = false, k;
@@ -77,6 +92,8 @@
     estado.vacias = (estado.vacias || 0) + 1;      // si no encuentra contadores (p. ej. pidió login), deja de recargar
     try { localStorage.setItem(CLAVE, JSON.stringify(estado)); } catch (e) {}
   }
+  var resumen = ''; for (k in actual) { resumen += k.charAt(0) + actual[k] + ' '; }
+  insignia(hay ? ('🔔 Aviso activo · ' + resumen + '· toca para probar') : '⚠ Aviso: no encuentro los contadores');
   if (estado.vacias >= 3) return;
   setTimeout(function () { if (!document.getElementById('avisoPedidosPausa')) location.reload(); }, SEGUNDOS * 1000);
 })();
