@@ -3001,6 +3001,8 @@ function nuevoProductoSave() {
 
     <div class="mod-card">
       <div class="mod-step-label" id="consec-titulo">📦 Consecutivo</div>
+      <div id="consec-estado" style="font-size:12px;color:#8b949e;margin:6px 0"></div>
+      <button class="mod-back-btn" style="margin-bottom:6px" onclick="sincronizarAhora(this)">🔄 Sincronizar ahora</button>
       <div class="mod-step-desc" style="margin:8px 0 6px">📅 Fecha</div>
       <div class="sbox"><span class="sico">📅</span><input id="consec-fecha" type="date"/></div>
       <div class="mod-step-desc" style="margin:10px 0 6px">👤 Usuario</div>
@@ -3697,6 +3699,7 @@ function consecAll() {
     if (!it.n) { it.n = 1; cambio = true; }
     if (!it.user) { if (!consecYo()) return; it.user = consecYo(); it._pend = 1; cambio = true; }   // lo antiguo sin dueño pasa al primer usuario que entra
     if (!it.id) { it.id = 'l_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); it._pend = 1; cambio = true; }
+    if (it._pend) { delete it._pend; cambio = true; consecEncolar('consec', it); }   // pendiente de enviar: va a la cola (no se pierde sin señal)
   });
   if (cambio) localStorage.setItem('dimerc_consec', JSON.stringify(all));
   return all;
@@ -3729,43 +3732,31 @@ function consecElegir(n) { consecSel.n = n; renderConsecList(); }
 function consecDeSel(it) { return it.fecha === consecSel.fecha && it.n === consecSel.n && it.user === consecSel.user; }
 function getConsecList() { return consecAll().filter(consecDeSel); }
 
-// Sincronización en línea (Firebase): se envían los ítems pendientes y se reciben los de los demás en tiempo real
-window.consecEnviarPend = function() {
-  if (!(window._db && window._fbReady)) return;
-  const all = consecAll(), envios = [];
-  all.forEach(function(it) {
-    if (!it._pend || it._enviando) return;
-    const ref = String(it.id).indexOf('l_') === 0 ? window._db.ref('consecutivos').push() : window._db.ref('consecutivos/' + it.id);
-    it.id = ref.key; envios.push({ ref: ref, copia: (function() { const c = Object.assign({}, it); delete c._pend; return c; })() });
-  });
-  if (!envios.length) return;
-  consecSetAll(all);   // primero se guarda el id nuevo; así el eco de Firebase no duplica
-  envios.forEach(function(e) {
-    e.ref.set(e.copia).then(function() { const a2 = consecAll(); a2.forEach(function(x) { if (x.id === e.copia.id) delete x._pend; }); consecSetAll(a2); }).catch(function(err) { console.error('consecutivo no enviado', err); });
-  });
-};
-window.consecIniciarFB = function(db) {
-  const ref = db.ref('consecutivos');
-  ref.on('child_added', function(snap) {
-    const d = snap.val(); if (!d) return; d.id = snap.key;
+// Sincronización en línea: se usa el mismo registro de cambios de Modificaciones (cola local + envío + reproducción al abrir)
+function consecEncolar(tipo, it) {
+  try {
+    window.encolarCambio(it.cod, it.desc, '—', it.ubic || '—', it.user, tipo, { cid: it.id, fecha: it.fecha, n: it.n, cantidad: it.cantidad, ubicP: it.ubic || '—' }, tipo === 'consec' ? (it._tsRaw || null) : null);
+  } catch(e) { console.error('consecutivo no encolado', e); }
+}
+// Aplica un cambio recibido (de otro equipo o de la reproducción del registro)
+window.consecAplicarCambio = function(d) {
+  if (d.tipo === 'consec') {
     const all = consecAll();
-    if (all.some(function(x) { return x.id === d.id; })) return;
-    all.push(d); consecSetAll(all); consecRefrescar();
-  });
-  ref.on('child_removed', function(snap) {
-    consecSetAll(consecAll().filter(function(x) { return x.id !== snap.key; })); consecRefrescar();
-  });
-  ref.on('child_changed', function(snap) {
-    const d = snap.val(); if (!d) return; d.id = snap.key;
-    consecSetAll(consecAll().map(function(x) { return x.id === d.id ? d : x; })); consecRefrescar();
-  });
-  window.consecEnviarPend();
+    if (all.some(function(x) { return x.id === d.cid; })) return false;
+    all.push({ id: d.cid, cod: d.cod, desc: d.desc, ubic: d.ubicP || d.a || '—', cantidad: d.cantidad, ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, fecha: d.fecha, n: d.n, user: d.user });
+    consecSetAll(all); return true;
+  }
+  if (d.tipo === 'consec_del') {
+    const all = consecAll(), r = all.filter(function(x) { return x.id !== d.cid; });
+    if (r.length === all.length) return false;
+    consecSetAll(r); return true;
+  }
+  return false;
 };
 function consecRefrescar() {
   clearTimeout(window._consecT);
   window._consecT = setTimeout(function() { try { const s = document.getElementById('section-consec'); if (s && s.style.display !== 'none') renderConsecList(); } catch(e) {} }, 200);
 }
-setInterval(function() { try { window.consecEnviarPend(); } catch(e) {} }, 20000);
 
 const consecCodEl = document.getElementById('consec-cod');
 consecCodEl.addEventListener('input', e => {
@@ -3822,19 +3813,20 @@ function consecAddItem() {
   const item = {
     id: 'l_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
     cod: consecCurrentProduct.cod, desc: consecCurrentProduct.desc, ubic: consecCurrentProduct.ubic || '—', cantidad: qty,
-    ts: now.toLocaleString('es-CL'), _tsRaw: now.toISOString(), fecha: consecSel.fecha, n: consecSel.n, user: yo, _pend: 1
+    ts: now.toLocaleString('es-CL'), _tsRaw: now.toISOString(), fecha: consecSel.fecha, n: consecSel.n, user: yo
   };
   const all = consecAll(); all.push(item); consecSetAll(all);
   const m = consecMeta(), k = consecSel.fecha + '|' + yo; if ((m[k] || 0) < consecSel.n) { m[k] = consecSel.n; consecMetaSet(m); }
-  try { window.consecEnviarPend(); } catch(e) {}
+  consecEncolar('consec', item);
   consecClear();
   renderConsecList();
   consecCodEl.focus();
 }
 
 function consecQuitarPorId(id) {
-  consecSetAll(consecAll().filter(function(it) { return it.id !== id; }));
-  try { if (window._db && window._fbReady && String(id).indexOf('l_') !== 0) window._db.ref('consecutivos/' + id).remove(); } catch(e) {}
+  const all = consecAll(), it = all.filter(function(x) { return x.id === id; })[0];
+  consecSetAll(all.filter(function(x) { return x.id !== id; }));
+  if (it) consecEncolar('consec_del', it);
 }
 function consecRemoveItem(idx) {
   const act = getConsecList(), objetivo = act[idx]; if (!objetivo) return;
@@ -3883,7 +3875,11 @@ function renderConsecList() {
   const addCard = document.getElementById('consec-add-card'); if (addCard) addCard.style.display = (hoy && mio) ? '' : 'none';
   const tit = document.getElementById('consec-titulo'); if (tit) tit.textContent = todos ? ('📦 Consecutivos ' + consecFmtFecha(consecSel.fecha)) : ('📦 ' + consecNombre(consecSel.fecha, consecSel.n) + ' · ' + consecSel.user);
 
-  try { window.consecEnviarPend(); } catch(e) {}
+  const estado = document.getElementById('consec-estado');
+  if (estado) {
+    let pend = 0; try { pend = JSON.parse(localStorage.getItem('dimerc_cambios_pend') || '[]').filter(function(x) { return String(x.tipo).indexOf('consec') === 0; }).length; } catch(e) {}
+    estado.textContent = !window._fbReady ? '🔴 Sin conexión con la base: lo que agregues se enviará solo al volver' : (pend ? '🟡 Enviando ' + pend + ' cambio(s)…' : '🟢 En línea: se sincroniza con los demás equipos');
+  }
   if(!list.length) {
     listCard.style.display = 'none';
     emptyCard.style.display = 'block';
@@ -4682,6 +4678,10 @@ function _setupFirebase() {
       // al día. 'stock' no se reaplica aquí: su estado vive en estado_stock.
       const esReplay = !!changeTs && changeTs < _fbStartTs - 5000;
       if (esReplay && d.tipo === 'stock') return;
+      if (d.tipo === 'consec' || d.tipo === 'consec_del') {
+        try { if (window.consecAplicarCambio(d)) consecRefrescar(); } catch(e) { console.error('consecutivo recibido falló', e); }
+        return;
+      }
       const esEcoLocal = d.saveId && window._recentLocalSaves && window._recentLocalSaves.has(d.saveId);
       try { (window._fbVistos = window._fbVistos || {})[(d.tipo||'') + '|' + d.cod + '|' + String(d.de||'').toUpperCase() + '|' + String(d.a||'').toUpperCase()] = changeTs || 1; } catch(e) {}
       if (d.tipo === 'ubic') {
@@ -4812,7 +4812,6 @@ function _setupFirebase() {
 
     window._fbReady = true;
     console.log('✅ Firebase inicializado correctamente');
-    try { window.consecIniciarFB(db); } catch(e) { console.error('consecutivos en línea falló', e); }
     try { window.flushCambiosPend && window.flushCambiosPend(); } catch(e) {}
 
     // ── Reparación del registro: todo cambio de ubicación que quedó solo en el historial LOCAL
@@ -4859,6 +4858,7 @@ function _setupFirebase() {
               Object.keys(todo).forEach(function(id) {
                 const d = todo[id]; if (!d || !d.cod || !d.ts) return;
                 if (new Date(d.ts).getTime() < _fbBaseTs) return;
+                if (d.tipo === 'consec' || d.tipo === 'consec_del') { try { if (window.consecAplicarCambio(d)) recibidos++; } catch(e) {} return; }
                 if (d.tipo !== 'ubic' && d.tipo !== 'nuevo' && d.tipo !== 'stock') return;
                 const tt = new Date(d.ts).getTime(), aa = String(d.a||'').toUpperCase(), dde = String(d.de||'').toUpperCase();
                 const lst = (claves[d.cod] = claves[d.cod] || []);
