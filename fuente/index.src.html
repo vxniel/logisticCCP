@@ -2991,6 +2991,15 @@ function nuevoProductoSave() {
   <div class="mod-wrap">
 
     <div class="mod-card">
+      <div class="mod-step-label" id="consec-titulo">📦 Consecutivo</div>
+      <div class="mod-step-desc" style="margin:8px 0 6px">📅 Fecha</div>
+      <div class="sbox"><span class="sico">📅</span><input id="consec-fecha" type="date"/></div>
+      <div class="mod-step-desc" style="margin:10px 0 6px">Consecutivos de esa fecha (toca uno para verlo)</div>
+      <div id="consec-chips" style="display:flex;flex-wrap:wrap"></div>
+      <button class="mod-back-btn" id="consec-nuevo-btn" style="margin-top:6px" onclick="consecNuevo()">➕ Nuevo consecutivo</button>
+    </div>
+
+    <div class="mod-card" id="consec-add-card">
       <div class="mod-step-label">📋 Agregar producto al consecutivo</div>
       <div class="mod-step-desc">Escanea o ingresa el código del producto</div>
 
@@ -3029,16 +3038,14 @@ function nuevoProductoSave() {
       </div>
 
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        <button class="mod-back-btn" onclick="exportConsecExcel()">📊 Exportar Excel</button>
-        <button class="mod-back-btn" onclick="exportConsecPDF()">📄 Exportar PDF</button>
-        <button class="mod-back-btn" onclick="consecClearList()">🗑 Limpiar lista</button>
+        <button class="mod-back-btn" onclick="exportConsecExcel()">📊 Exportar Excel (fecha)</button>
+        <button class="mod-back-btn" onclick="exportConsecPDF()">📄 Exportar PDF (fecha)</button>
+        <button class="mod-back-btn" onclick="consecClearList()">🗑 Limpiar este consecutivo</button>
       </div>
     </div>
 
     <div id="consec-empty-card" class="mod-card" style="text-align:center;padding:24px;color:#484f58;font-size:13px">
-      <div style="font-size:32px;margin-bottom:8px">📋</div>
-      Aún no has agregado productos al consecutivo
-    </div>
+      <div style="font-size:32px;margin-bottom:8px">📋</div>Aún no has agregado productos a este consecutivo</div>
 
   </div>
 </div><!-- /section-consec -->
@@ -3666,13 +3673,43 @@ function nuevoProductoSave() {
 let consecStream = null, consecScanTimer = null, consecLastCode = '';
 let consecCurrentProduct = null;
 
-function getConsecList() {
-  try { return JSON.parse(localStorage.getItem('dimerc_consec')||'[]'); }
-  catch(e) { return []; }
+// ── Consecutivos por fecha: cada ítem guarda fecha (AAAA-MM-DD) y n° de consecutivo del día ──
+function consecHoyKey() { const d = getOfficialNow(); return histYMD(d); }
+function consecFmtFecha(k) { const [y,m,d] = String(k).split('-'); return d + '/' + m + '/' + String(y).slice(2); }
+function consecNombre(k, n) { return 'Consecutivo ' + consecFmtFecha(k) + ' (' + n + ')'; }
+function consecAll() {
+  let all; try { all = JSON.parse(localStorage.getItem('dimerc_consec') || '[]'); } catch(e) { all = []; }
+  let cambio = false;
+  all.forEach(function(it) {
+    if (!it.fecha) { const d = histParseTs(it); it.fecha = histYMD(d || getOfficialNow()); cambio = true; }
+    if (!it.n) { it.n = 1; cambio = true; }
+  });
+  if (cambio) localStorage.setItem('dimerc_consec', JSON.stringify(all));
+  return all;
 }
-function setConsecList(list) {
-  localStorage.setItem('dimerc_consec', JSON.stringify(list));
+function consecSetAll(all) { localStorage.setItem('dimerc_consec', JSON.stringify(all)); }
+function consecMeta() { try { return JSON.parse(localStorage.getItem('dimerc_consec_meta') || '{}'); } catch(e) { return {}; } }
+function consecMetaSet(m) { localStorage.setItem('dimerc_consec_meta', JSON.stringify(m)); }
+function consecNums(fecha) {
+  const set = {}; consecAll().forEach(function(it) { if (it.fecha === fecha) set[it.n] = 1; });
+  const mx = consecMeta()[fecha] || 0; for (let i = 1; i <= mx; i++) set[i] = 1;
+  return Object.keys(set).map(Number).sort(function(a, b) { return a - b; });
 }
+let consecSel = { fecha: null, n: 1 };
+function consecFechaEl() { return document.getElementById('consec-fecha'); }
+function consecInit() {
+  const el = consecFechaEl(); if (!el) return;
+  el.onchange = function() { consecSel.fecha = el.value || consecHoyKey(); const ns = consecNums(consecSel.fecha); consecSel.n = ns.length ? ns[ns.length - 1] : 1; renderConsecList(); };
+  if (!consecSel.fecha || !el.value) { consecSel.fecha = consecHoyKey(); el.value = consecSel.fecha; const ns = consecNums(consecSel.fecha); consecSel.n = ns.length ? ns[ns.length - 1] : 1; }
+}
+function consecNuevo() {
+  if (consecSel.fecha !== consecHoyKey()) { alert('Solo puedes crear un consecutivo nuevo en la fecha de hoy.'); return; }
+  const ns = consecNums(consecSel.fecha), sig = (ns.length ? ns[ns.length - 1] : 0) + 1;
+  const m = consecMeta(); m[consecSel.fecha] = sig; consecMetaSet(m);
+  consecSel.n = sig; renderConsecList();
+}
+function consecElegir(n) { consecSel.n = n; renderConsecList(); }
+function getConsecList() { return consecAll().filter(function(it) { return it.fecha === consecSel.fecha && it.n === consecSel.n; }); }
 
 const consecCodEl = document.getElementById('consec-cod');
 consecCodEl.addEventListener('input', e => {
@@ -3720,18 +3757,23 @@ function consecSearchProduct(v) {
 
 function consecAddItem() {
   if(!consecCurrentProduct) return;
+  if (consecSel.fecha !== consecHoyKey()) { alert('Estás viendo otra fecha. Vuelve a la fecha de hoy para agregar productos.'); return; }
   const qty = parseInt(document.getElementById('consec-qty').value) || 1;
   if(qty < 1) { alert('La cantidad debe ser al menos 1.'); return; }
-
-  const list = getConsecList();
-  list.push({
+  const all = consecAll();
+  const now = getOfficialNow();
+  all.push({
     cod: consecCurrentProduct.cod,
     desc: consecCurrentProduct.desc,
     ubic: consecCurrentProduct.ubic || '—',
     cantidad: qty,
-    ts: getOfficialNow().toLocaleString('es-CL')
+    ts: now.toLocaleString('es-CL'),
+    _tsRaw: now.toISOString(),
+    fecha: consecSel.fecha,
+    n: consecSel.n
   });
-  setConsecList(list);
+  consecSetAll(all);
+  const m = consecMeta(); if ((m[consecSel.fecha] || 0) < consecSel.n) { m[consecSel.fecha] = consecSel.n; consecMetaSet(m); }
 
   consecClear();
   renderConsecList();
@@ -3739,28 +3781,39 @@ function consecAddItem() {
 }
 
 function consecRemoveItem(idx) {
-  const list = getConsecList();
-  list.splice(idx, 1);
-  setConsecList(list);
+  const all = consecAll(), act = all.filter(function(it) { return it.fecha === consecSel.fecha && it.n === consecSel.n; });
+  const objetivo = act[idx]; if (!objetivo) return;
+  consecSetAll(all.filter(function(it) { return it !== objetivo && JSON.stringify(it) !== JSON.stringify(objetivo); }));
   renderConsecList();
 }
 
 function consecClearList() {
-  if(!confirm('¿Limpiar todo el listado consecutivo?')) return;
-  localStorage.removeItem('dimerc_consec');
+  if(!confirm('¿Limpiar ' + consecNombre(consecSel.fecha, consecSel.n) + '?')) return;
+  consecSetAll(consecAll().filter(function(it) { return !(it.fecha === consecSel.fecha && it.n === consecSel.n); }));
   renderConsecList();
 }
 
 function renderConsecList() {
+  consecInit();
   const list = getConsecList();
   const listCard = document.getElementById('consec-list-card');
   const emptyCard = document.getElementById('consec-empty-card');
   const itemsList = document.getElementById('consec-items-list');
   const count = document.getElementById('consec-count');
+  // Selector de consecutivos de la fecha
+  const ns = consecNums(consecSel.fecha); if (!ns.length) ns.push(1);
+  if (ns.indexOf(consecSel.n) < 0) consecSel.n = ns[ns.length - 1];
+  const hoy = consecSel.fecha === consecHoyKey();
+  const chips = document.getElementById('consec-chips');
+  if (chips) chips.innerHTML = ns.map(function(n) { return '<button type="button" class="jaula-btn ' + (consecSel.n === n ? 'active' : '') + '" style="margin:0 6px 6px 0" onclick="consecElegir(' + n + ')">' + consecNombre(consecSel.fecha, n) + '</button>'; }).join('');
+  const nb = document.getElementById('consec-nuevo-btn'); if (nb) nb.style.display = hoy ? '' : 'none';
+  const addCard = document.getElementById('consec-add-card'); if (addCard) addCard.style.display = hoy ? '' : 'none';
+  const tit = document.getElementById('consec-titulo'); if (tit) tit.textContent = '📦 ' + consecNombre(consecSel.fecha, consecSel.n);
 
   if(!list.length) {
     listCard.style.display = 'none';
     emptyCard.style.display = 'block';
+    emptyCard.lastChild.textContent = hoy ? 'Aún no has agregado productos a este consecutivo' : 'No hay productos en este consecutivo';
     return;
   }
   listCard.style.display = 'block';
@@ -3778,59 +3831,59 @@ function renderConsecList() {
     </div>`).join('');
 }
 
-function getConsecRows() {
-  const list = getConsecList();
-  const user = document.getElementById('consec-user').value.trim() || '—';
-  return list.map(it => ({
-    Codigo: it.cod,
-    Producto: it.desc,
-    Cantidad: it.cantidad,
-    Fecha: it.ts,
-    Usuario: user
-  }));
+// Filas de la fecha seleccionada, agrupadas por consecutivo
+function getConsecGrupos() {
+  const user = (document.getElementById('consec-user').value || '').trim() || '—';
+  const all = consecAll().filter(function(it) { return it.fecha === consecSel.fecha; });
+  const nums = {}; all.forEach(function(it) { nums[it.n] = 1; });
+  return Object.keys(nums).map(Number).sort(function(a, b) { return a - b; }).map(function(n) {
+    return { n: n, nombre: consecNombre(consecSel.fecha, n), rows: all.filter(function(it) { return it.n === n; }).map(function(it) {
+      return { Codigo: it.cod, Producto: it.desc, Cantidad: it.cantidad, Fecha: it.ts, Usuario: user };
+    }) };
+  });
 }
 
 function exportConsecExcel() {
-  const rows = getConsecRows();
-  if(!rows.length) { alert('No hay productos en el listado.'); return; }
-  const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{wch:12},{wch:45},{wch:10},{wch:20},{wch:14}];
-  const lastRow = rows.length + 2;
-  XLSX.utils.sheet_add_aoa(ws, [['By: Vxniel']], { origin: `A${lastRow}` });
+  const grupos = getConsecGrupos();
+  if(!grupos.length) { alert('No hay consecutivos en la fecha ' + consecFmtFecha(consecSel.fecha) + '.'); return; }
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Consecutivo');
-  const now = new Date();
-  const fecha = String(now.getDate()).padStart(2,'0') + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + now.getFullYear();
-  XLSX.writeFile(wb, `Consecutivo(${fecha}).xlsx`);
+  grupos.forEach(function(g) {
+    const rows = g.rows.map(function(r) { return Object.assign({ Consecutivo: g.nombre }, r); });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:26},{wch:12},{wch:45},{wch:10},{wch:20},{wch:14}];
+    XLSX.utils.sheet_add_aoa(ws, [['By: Vxniel']], { origin: 'A' + (rows.length + 3) });
+    XLSX.utils.book_append_sheet(wb, ws, 'Consec (' + g.n + ')');
+  });
+  const [y, m, d] = consecSel.fecha.split('-');
+  XLSX.writeFile(wb, `Consecutivo(${d}-${m}-${y}).xlsx`);
 }
 
 function exportConsecPDF() {
-  const rows = getConsecRows();
-  if(!rows.length) { alert('No hay productos en el listado.'); return; }
+  const grupos = getConsecGrupos();
+  if(!grupos.length) { alert('No hay consecutivos en la fecha ' + consecFmtFecha(consecSel.fecha) + '.'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   doc.setFontSize(14);
-  doc.text('Listado Consecutivo — DCCP', 30, 24);
+  doc.text('Listado Consecutivo — DCCP · ' + consecFmtFecha(consecSel.fecha), 30, 24);
   doc.setFontSize(9);
   doc.text('Generado: ' + getOfficialNow().toLocaleString('es-CL'), 30, 40);
-
-  doc.autoTable({
-    startY: 50,
-    head: [['Código','Producto','Cantidad','Fecha','Usuario']],
-    body: rows.map(r => [r.Codigo, r.Producto, r.Cantidad, r.Fecha, r.Usuario]),
-    styles: { fontSize: 7.5, cellPadding: 4, valign: 'middle', overflow: 'linebreak' },
-    headStyles: { fillColor: [31, 56, 84], fontSize: 8, halign: 'center' },
-    bodyStyles: { minCellHeight: 14 },
-    columnStyles: {
-      0: { cellWidth: 60, halign: 'center' },
-      1: { cellWidth: 330 },
-      2: { cellWidth: 65, halign: 'center' },
-      3: { cellWidth: 100 },
-      4: { cellWidth: 80 }
-    },
-    margin: { left: 30, right: 30 }
+  let y0 = 52;
+  grupos.forEach(function(g) {
+    doc.setFontSize(11); doc.setTextColor(0, 0, 0);
+    if (y0 > 520) { doc.addPage(); y0 = 30; }
+    doc.text(g.nombre + '  ·  ' + g.rows.length + (g.rows.length === 1 ? ' producto' : ' productos'), 30, y0);
+    doc.autoTable({
+      startY: y0 + 6,
+      head: [['Código','Producto','Cantidad','Fecha','Usuario']],
+      body: g.rows.map(r => [r.Codigo, r.Producto, r.Cantidad, r.Fecha, r.Usuario]),
+      styles: { fontSize: 7.5, cellPadding: 4, valign: 'middle', overflow: 'linebreak' },
+      headStyles: { fillColor: [31, 56, 84], fontSize: 8, halign: 'center' },
+      bodyStyles: { minCellHeight: 14 },
+      columnStyles: { 0: { cellWidth: 60, halign: 'center' }, 1: { cellWidth: 330 }, 2: { cellWidth: 65, halign: 'center' }, 3: { cellWidth: 100 }, 4: { cellWidth: 80 } },
+      margin: { left: 30, right: 30 }
+    });
+    y0 = doc.lastAutoTable.finalY + 24;
   });
-
   const pageCount = doc.internal.getNumberOfPages();
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -3840,10 +3893,8 @@ function exportConsecPDF() {
     doc.setTextColor(120, 120, 120);
     doc.text('By: Vxniel', pageW - 30, pageH - 12, { align: 'right' });
   }
-
-  const now = new Date();
-  const fecha = String(now.getDate()).padStart(2,'0') + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + now.getFullYear();
-  doc.save(`Consecutivo(${fecha}).pdf`);
+  const [y, m, d] = consecSel.fecha.split('-');
+  doc.save(`Consecutivo(${d}-${m}-${y}).pdf`);
 }
 
 // ── consec scanner ──
