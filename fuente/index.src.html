@@ -3578,6 +3578,10 @@ function nuevoProductoSave() {
         <div class="mod-step-desc">1) Crea el bulto y pega su código de barra en la caja · 2) Asigna los productos · 3) Ciérralo: se crea un consecutivo por caja · 4) Emite la guía de despacho.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           <button class="mod-confirm-btn" style="margin:0;flex:1" onclick="bulNuevo()">➕ Nuevo bulto</button>
+          </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <div class="sbox" style="width:110px;margin:0"><span class="sico">#</span><input id="bl-lote-n" type="number" min="1" max="200" value="10" inputmode="numeric" onkeydown="if(event.keyCode===13){bulGenerarLote();}"/></div>
+          <button class="mod-back-btn" style="margin:0;flex:1" onclick="bulGenerarLote()">🏷️ Sacar etiquetas nuevas (sin productos)</button>
         </div>
       </div>
       <div class="mod-card">
@@ -8638,6 +8642,56 @@ function blDescargarZPL() {
   const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b) { alert('Primero selecciona un bulto.'); return; }
   const blob = new Blob([blZPL(b, blTam())], { type: 'text/plain;charset=utf-8' }), a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = 'Bulto_' + b.id + '.zpl'; document.body.appendChild(a); a.click(); setTimeout(function() { a.remove(); }, 500);
+}
+// ---- Sacar 10 etiquetas nuevas (bultos vacíos, sin productos) para pegar en cajas y asignar después ----
+let BUL_LOTE = [];
+function bulGenerarLote(n) {
+  const yo = consecYo(); if (!yo) { alert('Inicia sesión.'); return; }
+  if (!n) { const el = document.getElementById('bl-lote-n'); n = parseInt(el && el.value, 10); }
+  if (!n || n < 1) { alert('Escribe cuántas etiquetas quieres sacar.'); return; }
+  if (n > 200) { alert('Máximo 200 etiquetas por vez.'); return; }
+  if (!confirm('Se crearán ' + n + ' etiquetas nuevas (bultos vacíos, sin productos asignados) para imprimir. ¿Continuar?')) return;
+  const fecha = consecHoyKey(), all = bulAll(), usados = all.filter(function(b) { return b.fecha === fecha; }).map(function(b) { return b.num; });
+  let num = usados.length ? Math.max.apply(null, usados) : 0; const ids = [], idsUsados = {}; all.forEach(function(b) { idsUsados[b.id] = 1; });
+  for (let k = 0; k < n; k++) {
+    num++; let id = bulCodigo(fecha, num); while (idsUsados[id]) id = bulCodigo(fecha, num); idsUsados[id] = 1;
+    all.push({ id: id, fecha: fecha, num: num, estado: 'abierto', consec: null, user: yo, items: [] }); ids.push(id);
+  }
+  bulSet(all);
+  ids.forEach(function(id) { const b = all.filter(function(x) { return x.id === id; })[0]; bulEnc('—', 'Nuevo bulto', yo, 'bulto_nuevo', { bid: id, fecha: fecha, num: b.num }); });
+  BUL_LOTE = ids; document.getElementById('bl-fecha').value = fecha; BUL_SEL = ids[0]; bulRender(); bulLoteModal();
+}
+function bulLoteModal() {
+  const old = document.getElementById('bl-lote-modal'); if (old) old.remove();
+  const tam = blTam(), opts = Object.keys(BL_TAMS).map(function(k) { return '<option value="' + k + '"' + (k === tam ? ' selected' : '') + '>' + BL_TAMS[k][0] + ' × ' + BL_TAMS[k][1] + ' mm</option>'; }).join('');
+  const m = document.createElement('div'); m.id = 'bl-lote-modal';
+  m.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:99999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:14px';
+  m.innerHTML = '<div style="background:#161b22;border:1px solid #30363d;border-radius:14px;padding:16px;max-width:420px;width:100%;max-height:90vh;overflow:auto">'
+    + '<div style="font-size:16px;font-weight:800;color:#e6edf3">🏷️ ' + BUL_LOTE.length + ' etiquetas nuevas</div>'
+    + '<div style="font-size:12px;color:#8b949e;margin:4px 0 10px">Bultos vacíos listos para imprimir. Pega cada etiqueta en una caja y asigna sus productos después.</div>'
+    + '<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;font-size:13px;color:#e6edf3;font-weight:700">' + BUL_LOTE.map(function(id) { return '<div>🟢 ' + trasEsc(id) + '</div>'; }).join('') + '</div>'
+    + '<div style="font-size:12px;color:#8b949e;margin-bottom:4px">📐 Tamaño de etiqueta</div>'
+    + '<select onchange="blSetTam(this.value)" style="width:100%;height:46px;padding:0 12px;box-sizing:border-box;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:15px">' + opts + '</select>'
+    + '<button type="button" class="mod-confirm-btn" style="margin-top:10px" onclick="bulLoteImprimir()">🖨️ Imprimir las ' + BUL_LOTE.length + ' etiquetas</button>'
+    + '<button type="button" class="mod-back-btn" style="margin-top:8px" onclick="bulLoteZPL()">⬇️ Descargar ZPL (Zebra)</button>'
+    + '<button type="button" class="mod-back-btn" style="margin-top:8px" onclick="document.getElementById(\'bl-lote-modal\').remove()">Cerrar</button></div>';
+  document.body.appendChild(m);
+}
+function bulLoteBultos() { return BUL_LOTE.map(bulGet).filter(function(b) { return b; }); }
+function bulLoteImprimir() {
+  const bs = bulLoteBultos(); if (!bs.length) return; const tam = blTam();
+  const docs = bs.map(function(b) { return blHtmlEtiqueta(b, tam); });
+  const css = /<style>([\s\S]*?)<\/style>/.exec(docs[0])[1];
+  const cuerpo = docs.map(function(d) { return /<body>([\s\S]*)<\/body>/.exec(d)[1]; }).join('');
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Etiquetas de bultos</title><style>' + css + 'body{height:auto!important;overflow:visible!important}.l{page-break-after:always;break-after:page}.l:last-child{page-break-after:auto;break-after:auto}</style></head><body>' + cuerpo + '</body></html>';
+  const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; document.body.appendChild(f);
+  const d = f.contentWindow.document; d.open(); d.write(html); d.close();
+  setTimeout(function() { try { f.contentWindow.focus(); f.contentWindow.print(); } catch(e) { alert('No se pudo abrir la impresión: ' + e.message); } setTimeout(function() { try { f.remove(); } catch(e) {} }, 4000); }, 500);
+}
+function bulLoteZPL() {
+  const bs = bulLoteBultos(); if (!bs.length) return; const tam = blTam();
+  const blob = new Blob([bs.map(function(b) { return blZPL(b, tam); }).join('\n')], { type: 'text/plain;charset=utf-8' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'Etiquetas_bultos_' + bs[0].id + '_a_' + bs[bs.length - 1].id + '.zpl'; document.body.appendChild(a); a.click(); setTimeout(function() { a.remove(); }, 500);
 }
 function blCopiarZPL() {
   const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b) { alert('Primero selecciona un bulto.'); return; }
