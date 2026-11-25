@@ -3554,34 +3554,54 @@ function nuevoProductoSave() {
 
     <div id="bc-panel-bulto" style="display:none">
       <div class="mod-card">
-        <div class="mod-step-label">📦 Generar código de bulto</div>
-        <div class="mod-step-desc">Elige un consecutivo y genera el código de barra de su bulto. Al escanearlo en Listar Consecutivo, la app abre ese consecutivo.</div>
+        <div class="mod-step-label">📦 Bultos (cajas Dimerc)</div>
+        <div class="mod-step-desc">1) Crea el bulto y pega su código de barra en la caja · 2) Asigna los productos · 3) Ciérralo: pasa a un consecutivo · 4) Emite la guía de despacho.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button class="mod-confirm-btn" style="margin:0;flex:1" onclick="bulNuevo()">➕ Nuevo bulto</button>
+        </div>
       </div>
       <div class="mod-card">
         <div class="mod-step-desc" style="margin-bottom:6px">📅 Fecha</div>
-        <div class="lfield"><input id="bl-fecha" type="date" onchange="blRender()"/></div>
-        <div class="mod-step-desc" style="margin:10px 0 6px">Consecutivo (toca uno)</div>
+        <div class="lfield"><input id="bl-fecha" type="date" onchange="bulRender()"/></div>
+        <div class="mod-step-desc" style="margin:10px 0 6px">Bultos de la fecha (toca uno)</div>
         <div id="bl-chips" style="display:flex;flex-wrap:wrap"></div>
-        <div id="bl-resumen" style="font-size:12px;color:#58a6ff;margin:6px 0 10px"></div>
-        <div style="display:flex;gap:10px">
-          <div style="flex:1"><div class="mod-step-desc" style="margin-bottom:6px">N° de bulto</div><div class="sbox"><input id="bl-nbulto" type="number" min="1" value="1" inputmode="numeric"/></div></div>
-          <div style="flex:1"><div class="mod-step-desc" style="margin-bottom:6px">Total bultos (opcional)</div><div class="sbox"><input id="bl-total" type="number" min="1" inputmode="numeric" placeholder="Ej: 3"/></div></div>
-        </div>
-        <div id="bl-err" style="font-size:12px;color:#f85149;margin-top:8px;display:none"></div>
-        <button class="mod-confirm-btn" onclick="blGenerar()">✔ Generar código de bulto</button>
+        <div class="mod-step-desc" style="margin:6px 0">🔎 …o escanea el código de la caja</div>
+        <div class="sbox"><span class="sico">📦</span><input id="bl-scan" type="text" placeholder="Código de bulto" autocomplete="off" oninput="bulScan(this.value)"/></div>
       </div>
-      <div class="mod-card" id="bl-preview-card" style="display:none">
-        <div class="mod-step-desc" style="margin-bottom:6px">Vista previa</div>
-        <div class="bc-preview-box" id="bl-preview-box">
+      <div class="mod-card" id="bl-det-card" style="display:none">
+        <div id="bl-titulo" class="mod-step-label" style="font-size:15px"></div>
+        <div id="bl-estado" style="font-size:12px;color:#58a6ff;margin:4px 0 8px"></div>
+        <div class="bc-preview-box" id="bl-preview-box" style="display:flex">
           <div class="bc-preview-label" id="bl-preview-label" style="white-space:pre-line;text-align:center"></div>
           <div class="bc-preview-svg-wrap"><svg id="bl-svg"></svg></div>
         </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button class="mod-back-btn" onclick="bcDescargarPNG('bl-svg','bl-preview-label',BUL_SEL)">📥 Descargar PNG</button>
+          <button class="mod-back-btn" onclick="blImprimir()">🖨️ Imprimir etiqueta</button>
+        </div>
+        <div id="bl-add" style="margin-top:14px">
+          <div class="mod-step-desc" style="margin-bottom:6px">➕ Asignar producto al bulto</div>
+          <div class="sbox"><span class="sico">🔢</span><input id="bl-cod" type="text" placeholder="Código o código de barra del producto..." autocomplete="off" oninput="bulBuscarProd(this.value)"/></div>
+          <div id="bl-prod" style="display:none;margin-top:8px"></div>
+          <div id="bl-qty-row" style="display:none;margin-top:8px">
+            <div class="sbox"><span class="sico">🔢</span><input id="bl-qty" type="number" min="1" value="1" inputmode="numeric"/></div>
+            <button class="mod-confirm-btn" style="margin-top:8px" onclick="bulAddItem()">+ Agregar al bulto</button>
+          </div>
+        </div>
+        <div id="bl-items" style="display:flex;flex-direction:column;gap:7px;margin-top:12px"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-          <button class="mod-back-btn" onclick="bcDescargarPNG('bl-svg','bl-preview-label',BL_ULTIMO)">📥 Descargar PNG</button>
-          <button class="mod-back-btn" onclick="blImprimir()">🖨️ Imprimir</button>
+          <button class="mod-confirm-btn" id="bl-cerrar-btn" style="margin:0;flex:1" onclick="bulCerrar()">🔒 Cerrar bulto y pasar a consecutivo</button>
+          <button class="mod-back-btn" id="bl-borrar-btn" style="margin:0;border-color:#f85149;color:#f85149" onclick="bulBorrar()">🗑 Eliminar bulto</button>
         </div>
       </div>
+      <div class="mod-card" id="bl-guia-card">
+        <div class="mod-step-label" style="font-size:14px">📄 Guía de despacho</div>
+        <div class="mod-step-desc">Marca los bultos cerrados que van en la guía.</div>
+        <div id="bl-guia-list" style="margin:8px 0"></div>
+        <button class="mod-confirm-btn" onclick="bulEmitirGuia()">📄 Emitir guía de despacho</button>
+      </div>
     </div><!-- /bc-panel-bulto -->
+
 
   </div>
 </div><!-- /section-barcode -->
@@ -3864,7 +3884,7 @@ function getConsecList() { return consecAll().filter(consecDeSel); }
 // Sincronización en línea: se usa el mismo registro de cambios de Modificaciones (cola local + envío + reproducción al abrir)
 function consecEncolar(tipo, it) {
   try {
-    window.encolarCambio(it.cod, it.desc, '—', it.ubic || '—', it.user, tipo, { cid: it.id, fecha: it.fecha, n: it.n, cantidad: it.cantidad, ubicP: it.ubic || '—' }, tipo === 'consec' ? (it._tsRaw || null) : null);
+    window.encolarCambio(it.cod, it.desc, '—', it.ubic || '—', it.user, tipo, { cid: it.id, fecha: it.fecha, n: it.n, cantidad: it.cantidad, ubicP: it.ubic || '—', bulto: it.bulto || null }, tipo === 'consec' ? (it._tsRaw || null) : null);
   } catch(e) { console.error('consecutivo no encolado', e); }
 }
 // Aplica un cambio recibido (de otro equipo o de la reproducción del registro)
@@ -3880,7 +3900,7 @@ window.consecAplicarCambio = function(d) {
     if (consecEsBorrado(d.fecha, d.n)) return false;
     const all = consecAll();
     if (all.some(function(x) { return x.id === d.cid; })) return false;
-    all.push({ id: d.cid, cod: d.cod, desc: d.desc, ubic: d.ubicP || d.a || '—', cantidad: d.cantidad, ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, fecha: d.fecha, n: d.n, user: d.user });
+    all.push({ id: d.cid, cod: d.cod, desc: d.desc, ubic: d.ubicP || d.a || '—', cantidad: d.cantidad, ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, fecha: d.fecha, n: d.n, user: d.user, bulto: d.bulto || undefined });
     consecSetAll(all); try { trasRevisarItem(all[all.length - 1], false); } catch(e) {} return true;
   }
   if (d.tipo === 'consec_nuevo') {
@@ -3918,15 +3938,17 @@ function consecClear() {
 function consecSearchProduct(v) {
   const preview = document.getElementById('consec-product-preview');
   const qtyRow = document.getElementById('consec-qty-row');
-  const bl = blParse(v);   // código de bulto escaneado: abre el consecutivo enlazado
+  const bl = blParse(v);   // código de bulto escaneado: abre el consecutivo al que pasó
   if (bl) {
-    if (consecNums(bl.fecha).indexOf(bl.n) < 0) { preview.innerHTML = '<div class="mod-product-preview" style="background:#2a0f0f;border-color:#f85149"><div style="color:#f85149;font-size:13px;font-weight:700">⚠️ Ese bulto apunta a un consecutivo que ya no existe</div></div>'; preview.style.display = 'block'; qtyRow.style.display = 'none'; consecCurrentProduct = null; return; }
-    consecSel.fecha = bl.fecha; consecSel.n = bl.n; consecSel.user = '*'; consecMulti.on = false;
-    const fe = consecFechaEl(); if (fe) fe.value = bl.fecha;
+    const b = bulGet(bl.id);
+    if (!b || b.estado !== 'cerrado') { preview.innerHTML = '<div class="mod-product-preview" style="background:#2a0f0f;border-color:#f85149"><div style="color:#f85149;font-size:13px;font-weight:700">⚠️ ' + (b ? 'Ese bulto aún está abierto (no pasó a ningún consecutivo)' : 'Bulto no encontrado') + '</div></div>'; preview.style.display = 'block'; qtyRow.style.display = 'none'; consecCurrentProduct = null; return; }
+    consecSel.fecha = b.fecha; consecSel.n = b.consec; consecSel.user = '*'; consecMulti.on = false;
+    const fe = consecFechaEl(); if (fe) fe.value = b.fecha;
     consecClear(); renderConsecList();
-    try { (window.showToast || function() {})('📦 Bulto ' + bl.bulto + ' → ' + consecNombre(bl.fecha, bl.n)); } catch(e) {}
+    try { (window.showToast || function() {})('📦 ' + b.id + ' → ' + consecNombre(b.fecha, b.consec)); } catch(e) {}
     return;
   }
+
   if(!v) { preview.style.display='none'; qtyRow.style.display='none'; consecCurrentProduct=null; return; }
   const qq = v.toLowerCase();
 
@@ -4083,7 +4105,7 @@ function renderConsecList() {
   itemsList.innerHTML = list.map((it, i) => `
     <div class="hist-item">
       <div class="hist-item-name">${it.desc}</div>
-      <div class="hist-item-sub">Código: <b style="color:#e6edf3">${it.cod}</b> · Ubicación: ${it.ubic} · Cantidad: <b style="color:#3fb950">${it.cantidad}</b></div>
+      <div class="hist-item-sub">Código: <b style="color:#e6edf3">${it.cod}</b> · Ubicación: ${it.ubic} · Cantidad: <b style="color:#3fb950">${it.cantidad}</b>${it.bulto ? ' · 📦 ' + it.bulto : ''}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
         <div class="hist-item-user" style="margin:0">👤 ${it.user} · 🕐 ${it.ts}</div>
         ${(it.user === yo || completo) ? `<button onclick="consecRemoveItem(${i})" style="background:none;border:none;color:#f85149;font-size:12px;cursor:pointer;padding:2px 6px">✕ Quitar</button>` : ''}
@@ -4191,7 +4213,12 @@ function exportConsecGuia(nums) {
   const fecha = consecSel.fecha, ns = (nums && nums.length) ? nums : [consecSel.n];
   const its = consecAll().filter(function(it) { return it.fecha === fecha && ns.indexOf(it.n) >= 0; });
   const docNombre = ns.length === 1 ? consecNombre(fecha, ns[0]) : 'Consecutivo ' + consecFmtFecha(fecha) + ' ' + ns.map(function(x) { return '(' + x + ')'; }).join(' + ');
-  const archN = ns.join('+');
+  const fp = fecha.split('-');
+  guiaGenerar({ titulo: 'REGISTRO PICKING', pie: 'Registro picking', docNombre: docNombre, fecha: fecha, its: its, archivo: 'Registro_Picking_Consecutivo_' + fp[2] + '-' + fp[1] + '-' + fp[0] + '_(' + ns.join('+') + ').pdf' });
+}
+// Documento PDF genérico (Registro picking / Guía de despacho). cfg: titulo, pie, docNombre, fecha, its[{cod,desc,cantidad}], archivo, bultos[{id,items}] (opcional)
+function guiaGenerar(cfg) {
+  const fecha = cfg.fecha, its = cfg.its, docNombre = cfg.docNombre;
   if (!its.length) { alert('Lo seleccionado no tiene productos.'); return; }
   if (!window.jspdf) { alert('El generador de PDF aún no cargó. Revisa la conexión e intenta de nuevo.'); return; }
   const porCod = {}, orden = [];
@@ -4220,7 +4247,7 @@ function exportConsecGuia(nums) {
   // Cabecera
   doc.setFillColor(AZ[0], AZ[1], AZ[2]); doc.rect(ML, 36, CW, 38, 'F');
   doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('BODEGA DIMERC CONCEPCIÓN', ML + 10, 60);
-  doc.setFontSize(13); doc.text('REGISTRO PICKING', ML + CW - 10, 60, { align: 'right' });
+  doc.setFontSize(13); doc.text(cfg.titulo, ML + CW - 10, 60, { align: 'right' });
   doc.setTextColor(0, 0, 0);
   doc.autoTable({
     startY: 82, theme: 'grid', margin: { left: ML, right: ML },
@@ -4236,8 +4263,8 @@ function exportConsecGuia(nums) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(AZ[0], AZ[1], AZ[2]); doc.text('DESGLOSE', ML, yy);
   doc.autoTable({
     startY: yy + 4, theme: 'grid', margin: { left: ML, right: ML },
-    head: [['TOTAL ARTÍCULOS REGISTRADOS', 'TOTAL UNIDADES', 'LÍNEAS ESCANEADAS', 'TIPOS DE PRODUCTO']],
-    body: [[guiaNum(totArt), guiaNum(totUni), guiaNum(lineas), String(grupos.length)]],
+    head: [['TOTAL ARTÍCULOS REGISTRADOS', 'TOTAL UNIDADES', cfg.bultos ? 'TOTAL BULTOS' : 'LÍNEAS ESCANEADAS', 'TIPOS DE PRODUCTO']],
+    body: [[guiaNum(totArt), guiaNum(totUni), guiaNum(cfg.bultos ? cfg.bultos.length : lineas), String(grupos.length)]],
     styles: { halign: 'center', lineColor: [154, 167, 181], lineWidth: 0.5 },
     headStyles: { fillColor: AZ, fontSize: 7.5, textColor: 255 },
     bodyStyles: { fontSize: 16, fontStyle: 'bold', cellPadding: 6, textColor: [0, 0, 0] }
@@ -4282,6 +4309,32 @@ function exportConsecGuia(nums) {
       if (t === 'tot') { h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = GR; h.cell.styles.fontSize = 9; }
     }
   });
+  // Contenido por bulto (solo guía de despacho)
+  if (cfg.bultos && cfg.bultos.length) {
+    let by = doc.lastAutoTable.finalY + 22;
+    if (by > H - 120) { doc.addPage(); by = 42; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(AZ[0], AZ[1], AZ[2]); doc.text('CONTENIDO POR BULTO', ML, by);
+    const bb = [], bm = {};
+    cfg.bultos.forEach(function(bu) {
+      const ag = {}, ord = [];
+      bu.items.forEach(function(it) { const g = ag[it.cod] || (ag[it.cod] = { cod: it.cod, desc: it.desc || '', cant: 0 }); if (ord.indexOf(g) < 0) ord.push(g); g.cant += parseInt(it.cantidad, 10) || 0; });
+      const u = ord.reduce(function(a, g) { return a + g.cant; }, 0);
+      bm[bb.length] = 'sec';
+      bb.push([{ content: 'BULTO ' + bu.id + '  ·  ' + ord.length + (ord.length === 1 ? ' artículo' : ' artículos') + ' · ' + guiaNum(u) + ' unidades', colSpan: 3 }]);
+      ord.forEach(function(g) { bb.push([g.cod, g.desc, guiaNum(g.cant)]); });
+    });
+    doc.autoTable({
+      startY: by + 5, theme: 'plain', margin: { left: ML, right: ML, bottom: 40 },
+      head: [['CÓDIGO', 'DESCRIPCIÓN', 'UNIDADES']], body: bb,
+      styles: { fontSize: 7.8, cellPadding: { top: 2.6, bottom: 2.6, left: 4, right: 4 }, lineColor: [213, 220, 228], lineWidth: { bottom: 0.25 }, overflow: 'linebreak', valign: 'middle', textColor: [0, 0, 0] },
+      headStyles: { fillColor: AZ, textColor: 255, fontSize: 7.8 },
+      columnStyles: { 0: { cellWidth: 56, halign: 'center' }, 2: { cellWidth: 58, halign: 'right', fontStyle: 'bold' } },
+      didParseCell: function(h) {
+        if (h.section === 'head' && h.column.index === 2) h.cell.styles.halign = 'right';
+        if (h.section === 'body' && bm[h.row.index] === 'sec') { h.cell.styles.fillColor = GR; h.cell.styles.fontStyle = 'bold'; h.cell.styles.textColor = AZ; }
+      }
+    });
+  }
   // Firmas
   let fy = doc.lastAutoTable.finalY + 26;
   if (fy > H - 90) { doc.addPage(); fy = 70; }
@@ -4296,10 +4349,10 @@ function exportConsecGuia(nums) {
   const pc = doc.internal.getNumberOfPages();
   for (let i = 1; i <= pc; i++) {
     doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(120, 120, 120);
-    doc.text('Bodega Dimerc Concepción · Registro picking · ' + docNombre + ' · By: Vxniel', ML, H - 22);
+    doc.text('Bodega Dimerc Concepción · ' + cfg.pie + ' · ' + docNombre + ' · By: Vxniel', ML, H - 22);
     doc.text('Página ' + i + ' de ' + pc, W - ML, H - 22, { align: 'right' });
   }
-  doc.save('Registro_Picking_Consecutivo_' + d + '-' + m + '-' + y + '_(' + archN + ').pdf');
+  doc.save(cfg.archivo);
 }
 
 // ── consec scanner ──
@@ -5011,8 +5064,8 @@ function _setupFirebase() {
       // al día. 'stock' no se reaplica aquí: su estado vive en estado_stock.
       const esReplay = !!changeTs && changeTs < _fbStartTs - 5000;
       if (esReplay && d.tipo === 'stock') return;
-      if (d.tipo === 'consec' || d.tipo === 'consec_del' || d.tipo === 'consec_nuevo' || d.tipo === 'consec_borrar') {
-        try { if (window.consecAplicarCambio(d)) consecRefrescar(); } catch(e) { console.error('consecutivo recibido falló', e); }
+      if (/^(consec|bulto)/.test(String(d.tipo || ''))) {
+        try { const r1 = String(d.tipo).indexOf('bulto') === 0 ? window.bultoAplicarCambio(d) : window.consecAplicarCambio(d); if (r1) { consecRefrescar(); bulRefrescar(); } } catch(e) { console.error('consecutivo/bulto recibido falló', e); }
         return;
       }
       const esEcoLocal = d.saveId && window._recentLocalSaves && window._recentLocalSaves.has(d.saveId);
@@ -5191,7 +5244,7 @@ function _setupFirebase() {
               Object.keys(todo).forEach(function(id) {
                 const d = todo[id]; if (!d || !d.cod || !d.ts) return;
                 if (new Date(d.ts).getTime() < _fbBaseTs) return;
-                if (d.tipo === 'consec' || d.tipo === 'consec_del' || d.tipo === 'consec_nuevo' || d.tipo === 'consec_borrar') { try { if (window.consecAplicarCambio(d)) recibidos++; } catch(e) {} return; }
+                if (/^(consec|bulto)/.test(String(d.tipo || ''))) { try { if ((String(d.tipo).indexOf('bulto') === 0 ? window.bultoAplicarCambio(d) : window.consecAplicarCambio(d))) recibidos++; } catch(e) {} return; }
                 if (d.tipo !== 'ubic' && d.tipo !== 'nuevo' && d.tipo !== 'stock') return;
                 const tt = new Date(d.ts).getTime(), aa = String(d.a||'').toUpperCase(), dde = String(d.de||'').toUpperCase();
                 const lst = (claves[d.cod] = claves[d.cod] || []);
@@ -7999,54 +8052,178 @@ function bcImprimir() {
   setTimeout(() => { printArea.innerHTML = ''; }, 300);
 }
 
-// ===== Código de bulto (enlazado a un consecutivo): B + DDMMAA + C + N° consecutivo + - + N° bulto =====
-let BL_SEL = { fecha: null, n: null }, BL_ULTIMO = 'bulto';
+// ===== Bultos (cajas Dimerc): código de barra → asignar productos → cerrar y pasar a consecutivo → guía de despacho =====
+// Se sincronizan por el registro de cambios (tipos bulto_nuevo, bulto_item, bulto_item_del, bulto_cerrar, bulto_borrar).
+let BUL_SEL = null, BUL_PROD = null, BUL_GUIA = {};
+function bulAll() { try { return JSON.parse(localStorage.getItem('dimerc_bultos') || '[]'); } catch(e) { return []; } }
+function bulSet(a) { try { localStorage.setItem('dimerc_bultos', JSON.stringify(a)); } catch(e) {} }
+function bulCodigo(fecha, num) { const f = fecha.split('-'); return 'B' + f[2] + f[1] + String(f[0]).slice(2) + '-' + (num < 10 ? '0' + num : num); }
+// Interpreta un código de bulto escaneado → {id, fecha, num} o null
+function blParse(v) {
+  const m = /^B(\d{2})(\d{2})(\d{2})-(\d{2,3})$/i.exec(String(v || '').trim());
+  return m ? { id: m[0].toUpperCase(), fecha: '20' + m[3] + '-' + m[2] + '-' + m[1], num: parseInt(m[4], 10) } : null;
+}
+function bulGet(id) { return bulAll().filter(function(b) { return b.id === id; })[0] || null; }
+function bulEnc(cod, desc, user, tipo, extra) { try { window.encolarCambio(cod, desc, '—', '—', user, tipo, extra); } catch(e) { console.error('bulto no encolado', e); } }
+window.bultoAplicarCambio = function(d) {
+  const all = bulAll();
+  const mk = function(id, fecha, num, user) { return { id: id, fecha: fecha, num: num, estado: 'abierto', consec: null, user: user, items: [] }; };
+  let b = all.filter(function(x) { return x.id === d.bid; })[0];
+  if (d.tipo === 'bulto_nuevo') { if (b) return false; all.push(mk(d.bid, d.fecha, d.num, d.user)); bulSet(all); return true; }
+  if (d.tipo === 'bulto_borrar') { const r = all.filter(function(x) { return x.id !== d.bid; }); if (r.length === all.length) return false; bulSet(r); return true; }
+  if (!b) { if (d.tipo === 'bulto_item' && d.fecha) { b = mk(d.bid, d.fecha, d.num || 0, d.user); all.push(b); } else return false; }
+  if (d.tipo === 'bulto_item') {
+    if (b.items.some(function(x) { return x.id === d.cid; })) return false;
+    b.items.push({ id: d.cid, cod: d.cod, desc: d.desc, cantidad: d.cantidad, ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, user: d.user });
+    bulSet(all); return true;
+  }
+  if (d.tipo === 'bulto_item_del') { const n0 = b.items.length; b.items = b.items.filter(function(x) { return x.id !== d.cid; }); if (b.items.length === n0) return false; bulSet(all); return true; }
+  if (d.tipo === 'bulto_cerrar') { if (b.estado === 'cerrado' && b.consec === d.n) return false; b.estado = 'cerrado'; b.consec = d.n; bulSet(all); return true; }
+  return false;
+};
+function bulRefrescar() {
+  clearTimeout(window._bulT);
+  window._bulT = setTimeout(function() { try { const p = document.getElementById('bc-panel-bulto'); if (p && p.style.display !== 'none') bulRender(); } catch(e) {} }, 200);
+}
 function bcPanel(cual) {
   const b = cual === 'bulto';
   document.getElementById('bc-panel-barra').style.display = b ? 'none' : '';
   document.getElementById('bc-panel-bulto').style.display = b ? '' : 'none';
   document.getElementById('bc-tab-barra').classList.toggle('active', !b);
   document.getElementById('bc-tab-bulto').classList.toggle('active', b);
-  if (b) { const f = document.getElementById('bl-fecha'); if (!f.value) f.value = consecHoyKey(); blRender(); }
+  if (b) { const f = document.getElementById('bl-fecha'); if (!f.value) f.value = consecHoyKey(); bulRender(); }
 }
-function blCodigo(fecha, n, bulto) { const [y, m, d] = fecha.split('-'); return 'B' + d + m + String(y).slice(2) + 'C' + n + '-' + bulto; }
-// Interpreta un código de bulto escaneado; devuelve {fecha,n,bulto} o null
-function blParse(v) {
-  const m = /^B(\d{2})(\d{2})(\d{2})C(\d+)-(\d+)$/i.exec(String(v || '').trim());
-  return m ? { fecha: '20' + m[3] + '-' + m[2] + '-' + m[1], n: parseInt(m[4], 10), bulto: parseInt(m[5], 10) } : null;
+function bulNuevo() {
+  const yo = consecYo(); if (!yo) { alert('Inicia sesión.'); return; }
+  const fecha = consecHoyKey(), nums = bulAll().filter(function(b) { return b.fecha === fecha; }).map(function(b) { return b.num; });
+  const num = (nums.length ? Math.max.apply(null, nums) : 0) + 1, id = bulCodigo(fecha, num);
+  const all = bulAll(); all.push({ id: id, fecha: fecha, num: num, estado: 'abierto', consec: null, user: yo, items: [] }); bulSet(all);
+  bulEnc('—', 'Nuevo bulto', yo, 'bulto_nuevo', { bid: id, fecha: fecha, num: num });
+  document.getElementById('bl-fecha').value = fecha; BUL_SEL = id; bulRender();
 }
-function blRender() {
-  const f = document.getElementById('bl-fecha').value || consecHoyKey(); BL_SEL.fecha = f;
-  const ns = consecNums(f);
-  if (BL_SEL.n == null || ns.indexOf(BL_SEL.n) < 0) BL_SEL.n = ns.length ? ns[ns.length - 1] : null;
-  document.getElementById('bl-chips').innerHTML = ns.length ? ns.map(function(n) {
-    return '<button type="button" class="jaula-btn ' + (BL_SEL.n === n ? 'active' : '') + '" style="margin:0 6px 6px 0" onclick="BL_SEL.n=' + n + ';blRender()">' + consecNombre(f, n) + '</button>';
-  }).join('') : '<div style="font-size:12px;color:#7d8590">No hay consecutivos en esa fecha.</div>';
-  const its = BL_SEL.n == null ? [] : consecAll().filter(function(it) { return it.fecha === f && it.n === BL_SEL.n; });
-  const cods = {}; its.forEach(function(it) { cods[it.cod] = 1; });
-  document.getElementById('bl-resumen').textContent = BL_SEL.n == null ? '' : Object.keys(cods).length + ' artículos · ' + its.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0) + ' unidades';
+function bulSeleccionar(id) { BUL_SEL = id; BUL_PROD = null; bulRender(); }
+function bulScan(v) {
+  const bl = blParse(v); if (!bl) return;
+  const b = bulGet(bl.id);
+  if (!b) { alert('Ese bulto no existe en este equipo todavía. Revisa la conexión o la fecha.'); return; }
+  document.getElementById('bl-fecha').value = b.fecha; document.getElementById('bl-scan').value = ''; bulSeleccionar(b.id);
 }
-function blGenerar() {
-  const err = document.getElementById('bl-err'); err.style.display = 'none';
-  const f = BL_SEL.fecha || consecHoyKey(), n = BL_SEL.n;
-  const fail = function(t) { err.textContent = t; err.style.display = 'block'; };
-  if (n == null) { fail('Elige un consecutivo.'); return; }
-  const nb = parseInt(document.getElementById('bl-nbulto').value, 10) || 0, tot = parseInt(document.getElementById('bl-total').value, 10) || 0;
-  if (nb < 1) { fail('Indica el N° de bulto (1 o más).'); return; }
-  if (tot && nb > tot) { fail('El N° de bulto no puede ser mayor al total de bultos.'); return; }
-  const its = consecAll().filter(function(it) { return it.fecha === f && it.n === n; }), cods = {}; its.forEach(function(it) { cods[it.cod] = 1; });
-  const art = Object.keys(cods).length, uni = its.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0);
-  const codigo = blCodigo(f, n, nb); BL_ULTIMO = codigo;
-  let ok = true;
-  try { JsBarcode(document.getElementById('bl-svg'), codigo, { format: 'CODE128', lineColor: '#000', width: 2, height: 80, displayValue: true, fontSize: 16, margin: 10, valid: function(v) { ok = v; } }); } catch(e) { ok = false; }
-  if (!ok) { fail('No se pudo generar el código.'); return; }
-  document.getElementById('bl-preview-label').textContent = 'BODEGA DIMERC CONCEPCIÓN\nBULTO ' + nb + (tot ? ' de ' + tot : '') + ' · ' + consecNombre(f, n) + (art ? '\n' + art + ' artículos · ' + uni + ' unidades' : '');
-  document.getElementById('bl-preview-card').style.display = 'block';
-  document.getElementById('bl-preview-box').style.display = 'flex';
+function bulIcono(b) { return b.estado === 'cerrado' ? '🔒' : '🟢'; }
+function bulRender() {
+  const f = document.getElementById('bl-fecha').value || consecHoyKey();
+  const lista = bulAll().filter(function(b) { return b.fecha === f; }).sort(function(a, b) { return a.num - b.num; });
+  if (BUL_SEL && !lista.some(function(b) { return b.id === BUL_SEL; })) BUL_SEL = null;
+  if (!BUL_SEL && lista.length) BUL_SEL = lista[lista.length - 1].id;
+  document.getElementById('bl-chips').innerHTML = lista.length ? lista.map(function(b) {
+    return '<button type="button" class="jaula-btn ' + (BUL_SEL === b.id ? 'active' : '') + '" style="margin:0 6px 6px 0" onclick="bulSeleccionar(\'' + b.id + '\')">' + bulIcono(b) + ' ' + b.id + '</button>';
+  }).join('') : '<div style="font-size:12px;color:#7d8590">No hay bultos en esa fecha. Crea uno con "➕ Nuevo bulto".</div>';
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null, card = document.getElementById('bl-det-card');
+  card.style.display = b ? 'block' : 'none';
+  if (b) {
+    const cods = {}; b.items.forEach(function(it) { cods[it.cod] = 1; });
+    const uni = b.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0), cerrado = b.estado === 'cerrado';
+    document.getElementById('bl-titulo').textContent = '📦 Bulto ' + b.id;
+    document.getElementById('bl-estado').textContent = (cerrado ? '🔒 Cerrado → ' + consecNombre(b.fecha, b.consec) : '🟢 Abierto') + ' · ' + Object.keys(cods).length + ' artículos · ' + uni + ' unidades';
+    try { JsBarcode(document.getElementById('bl-svg'), b.id, { format: 'CODE128', lineColor: '#000', width: 2, height: 80, displayValue: true, fontSize: 16, margin: 10 }); } catch(e) {}
+    document.getElementById('bl-preview-label').textContent = 'BODEGA DIMERC CONCEPCIÓN\nBULTO ' + b.id;
+    document.getElementById('bl-add').style.display = cerrado ? 'none' : '';
+    document.getElementById('bl-cerrar-btn').style.display = cerrado ? 'none' : '';
+    document.getElementById('bl-borrar-btn').style.display = cerrado ? 'none' : '';
+    document.getElementById('bl-items').innerHTML = b.items.length ? b.items.map(function(it) {
+      return '<div class="hist-item"><div class="hist-item-name">' + trasEsc(it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + trasEsc(it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + trasEsc(it.cantidad) + '</b></div>'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><div class="hist-item-user" style="margin:0">👤 ' + trasEsc(it.user) + ' · 🕐 ' + trasEsc(it.ts) + '</div>'
+        + (!cerrado ? '<button onclick="bulQuitar(\'' + it.id + '\')" style="background:none;border:none;color:#f85149;font-size:12px;cursor:pointer;padding:2px 6px">✕ Quitar</button>' : '') + '</div></div>';
+    }).join('') : '<div style="font-size:12px;color:#7d8590">Este bulto aún no tiene productos.</div>';
+  }
+  const cer = lista.filter(function(x) { return x.estado === 'cerrado'; });
+  document.getElementById('bl-guia-list').innerHTML = cer.length ? cer.map(function(x) {
+    const u = x.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0);
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;color:#e6edf3"><input type="checkbox" ' + (BUL_GUIA[x.id] === false ? '' : 'checked') + ' onchange="BUL_GUIA[\'' + x.id + '\']=this.checked" style="width:18px;height:18px"> 🔒 ' + x.id + ' · ' + x.items.length + ' líneas · ' + u + ' uni. · ' + consecNombre(x.fecha, x.consec) + '</label>';
+  }).join('') : '<div style="font-size:12px;color:#7d8590">No hay bultos cerrados en esta fecha.</div>';
+}
+function bulBuscarProd(v) {
+  const prev = document.getElementById('bl-prod'), qty = document.getElementById('bl-qty-row');
+  v = (v || '').trim();
+  if (!v) { prev.style.display = 'none'; qty.style.display = 'none'; BUL_PROD = null; return; }
+  const qq = v.toLowerCase(); let found = null;
+  if (qq.length >= 7 && /^\d+$/.test(qq)) { const hits = Object.keys(BIDX).filter(function(b) { return b.includes(qq); }); if (hits.length) found = DATA[BIDX[hits[0]][0]]; }
+  if (!found) found = DATA.find(function(d) { return d.cod.toLowerCase() === qq; });
+  if (!found) found = DATA.find(function(d) { return d.cod.toLowerCase().includes(qq) || d.desc.toLowerCase().includes(qq); });
+  if (!found) { prev.innerHTML = '<div style="color:#f85149;font-size:13px;font-weight:700">⚠️ Producto no encontrado</div>'; prev.style.display = 'block'; qty.style.display = 'none'; BUL_PROD = null; return; }
+  BUL_PROD = found;
+  prev.innerHTML = '<div class="mod-product-preview"><div style="font-size:13px;color:#e6edf3;font-weight:600">' + trasEsc(found.desc) + '</div><div style="font-size:11px;color:#7d8590;margin-top:3px">Código: <b style="color:#58a6ff">' + trasEsc(found.cod) + '</b></div></div>';
+  prev.style.display = 'block'; qty.style.display = 'block'; document.getElementById('bl-qty').value = 1;
+}
+function bulAddItem() {
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null, yo = consecYo();
+  if (!b || b.estado === 'cerrado' || !BUL_PROD) return;
+  const q = parseInt(document.getElementById('bl-qty').value, 10) || 0; if (q < 1) { alert('La cantidad debe ser al menos 1.'); return; }
+  const now = getOfficialNow(), it = { id: 'bi_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), cod: BUL_PROD.cod, desc: BUL_PROD.desc, cantidad: q, ts: now.toLocaleString('es-CL'), _tsRaw: now.toISOString(), user: yo };
+  const all = bulAll(), bb = all.filter(function(x) { return x.id === b.id; })[0]; bb.items.push(it); bulSet(all);
+  try { window.encolarCambio(it.cod, it.desc, '—', '—', yo, 'bulto_item', { bid: b.id, fecha: b.fecha, num: b.num, cid: it.id, cantidad: q }, it._tsRaw); } catch(e) {}
+  document.getElementById('bl-cod').value = ''; BUL_PROD = null; document.getElementById('bl-prod').style.display = 'none'; document.getElementById('bl-qty-row').style.display = 'none';
+  bulRender(); try { document.getElementById('bl-cod').focus(); } catch(e) {}
+}
+function bulQuitar(cid) {
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b || b.estado === 'cerrado') return;
+  const all = bulAll(), bb = all.filter(function(x) { return x.id === b.id; })[0]; bb.items = bb.items.filter(function(x) { return x.id !== cid; }); bulSet(all);
+  bulEnc('—', 'Quitar de bulto', consecYo(), 'bulto_item_del', { bid: b.id, cid: cid }); bulRender();
+}
+function bulBorrar() {
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b || b.estado === 'cerrado') return;
+  if (!confirm('¿Eliminar el bulto ' + b.id + ' y sus ' + b.items.length + ' línea(s)?')) return;
+  bulSet(bulAll().filter(function(x) { return x.id !== b.id; }));
+  bulEnc('—', 'Bulto eliminado', consecYo(), 'bulto_borrar', { bid: b.id }); BUL_SEL = null; bulRender();
+}
+// Cerrar: elegir consecutivo destino; las líneas del bulto pasan al consecutivo (con referencia al bulto)
+function bulCerrar() {
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b || b.estado === 'cerrado') return;
+  if (!b.items.length) { alert('El bulto no tiene productos.'); return; }
+  const ns = consecNums(b.fecha);
+  let box = document.getElementById('bul-cerrar-modal'); if (box) box.remove();
+  box = document.createElement('div'); box.id = 'bul-cerrar-modal';
+  box.style.cssText = 'position:fixed;left:0;right:0;top:0;bottom:0;z-index:99998;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:14px';
+  box.innerHTML = '<div style="background:#0d1117;border:2px solid #3fb950;border-radius:14px;padding:16px;max-width:420px;width:100%;max-height:85vh;overflow:auto">'
+    + '<div style="font-size:16px;font-weight:800;color:#3fb950;margin-bottom:6px">🔒 Cerrar bulto ' + b.id + '</div>'
+    + '<div style="font-size:13px;color:#c9d1d9;margin-bottom:10px">Elige el consecutivo al que pasan sus ' + b.items.length + ' línea(s). Después no se podrá modificar el bulto.</div>'
+    + ns.map(function(n) { return '<button type="button" class="jaula-btn" style="margin:0 6px 6px 0" onclick="bulCerrarOk(' + n + ')">' + consecNombre(b.fecha, n) + '</button>'; }).join('')
+    + '<button type="button" class="jaula-btn" style="margin:0 6px 6px 0;border-color:#3fb950;color:#3fb950" onclick="bulCerrarOk(0)">➕ Nuevo consecutivo</button>'
+    + '<div style="margin-top:8px"><button type="button" onclick="document.getElementById(\'bul-cerrar-modal\').remove()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #30363d;background:#161b22;color:#e6edf3;font-size:14px;cursor:pointer">Cancelar</button></div></div>';
+  document.body.appendChild(box);
+}
+function bulCerrarOk(n) {
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null, yo = consecYo(); if (!b || b.estado === 'cerrado') return;
+  const m0 = document.getElementById('bul-cerrar-modal'); if (m0) m0.remove();
+  if (!n) {
+    const ns = consecNums(b.fecha), mxB = Math.max.apply(null, [0].concat(consecBorr()[b.fecha] || []));
+    n = Math.max(ns.length ? ns[ns.length - 1] : 0, mxB, consecMeta()[b.fecha] || 0) + 1;
+    const mt = consecMeta(); mt[b.fecha] = n; consecMetaSet(mt);
+    try { window.encolarCambio('—', 'Nuevo consecutivo', '—', '—', yo, 'consec_nuevo', { fecha: b.fecha, n: n }); } catch(e) {}
+  }
+  const all = consecAll(), ids = {}; all.forEach(function(x) { ids[x.id] = 1; });
+  b.items.forEach(function(it) {
+    const cid = 'bu_' + it.id; if (ids[cid]) return;
+    const ci = { id: cid, cod: it.cod, desc: it.desc, ubic: '—', cantidad: it.cantidad, ts: it.ts, _tsRaw: it._tsRaw, fecha: b.fecha, n: n, user: it.user, bulto: b.id };
+    all.push(ci); consecEncolar('consec', ci);
+  });
+  consecSetAll(all);
+  const mt2 = consecMeta(); if ((mt2[b.fecha] || 0) < n) { mt2[b.fecha] = n; consecMetaSet(mt2); }
+  const ba = bulAll(), bb = ba.filter(function(x) { return x.id === b.id; })[0]; bb.estado = 'cerrado'; bb.consec = n; bulSet(ba);
+  bulEnc('—', 'Bulto cerrado', yo, 'bulto_cerrar', { bid: b.id, n: n });
+  bulRender(); try { consecRefrescar(); } catch(e) {}
+}
+function bulEmitirGuia() {
+  const f = document.getElementById('bl-fecha').value || consecHoyKey();
+  const sel = bulAll().filter(function(b) { return b.fecha === f && b.estado === 'cerrado' && BUL_GUIA[b.id] !== false; }).sort(function(a, b) { return a.num - b.num; });
+  if (!sel.length) { alert('No hay bultos cerrados seleccionados.'); return; }
+  const its = []; sel.forEach(function(b) { b.items.forEach(function(it) { its.push(it); }); });
+  const fp = f.split('-');
+  guiaGenerar({ titulo: 'GUÍA DE DESPACHO', pie: 'Guía de despacho', docNombre: sel.length === 1 ? 'Bulto ' + sel[0].id : sel.length + ' bultos (' + sel[0].id + ' a ' + sel[sel.length - 1].id + ')', fecha: f, its: its, bultos: sel,
+    archivo: 'Guia_Despacho_' + fp[2] + '-' + fp[1] + '-' + fp[0] + '_(' + sel.map(function(b) { return b.num; }).join('+') + ').pdf' });
 }
 function blImprimir() {
   const box = document.getElementById('bl-preview-box');
-  if (!box || !document.getElementById('bl-svg').innerHTML.trim()) { alert('Primero genera un código de bulto.'); return; }
+  if (!box || !document.getElementById('bl-svg').innerHTML.trim()) { alert('Primero selecciona un bulto.'); return; }
   const printArea = document.getElementById('bc-print-area');
   printArea.innerHTML = box.outerHTML; window.print();
   setTimeout(function() { printArea.innerHTML = ''; }, 300);
