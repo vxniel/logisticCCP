@@ -3082,6 +3082,14 @@ function nuevoProductoSave() {
     <div id="consec-empty-card" class="mod-card" style="text-align:center;padding:24px;color:#484f58;font-size:13px">
       <div style="font-size:32px;margin-bottom:8px">📋</div>Aún no has agregado productos a este consecutivo</div>
 
+    <div class="mod-card" id="consec-cajas-card" style="display:none">
+      <div onclick="consecCajasToggle()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div class="mod-step-label" id="consec-cajas-titulo">📦 Detalle por caja</div>
+        <span id="consec-cajas-arrow" style="font-size:16px;color:#58a6ff"></span>
+      </div>
+      <div id="consec-cajas-list" style="display:flex;flex-direction:column;gap:8px;margin-top:10px"></div>
+    </div>
+
   </div>
 </div><!-- /section-consec -->
 
@@ -3881,6 +3889,34 @@ function trasRevisarItem(it, esLocal) {
     } catch(e) {}
   }, 1000);
 })();
+// Detalle por caja (bulto) del consecutivo visto: encabezado con flecha; cada caja se despliega con sus productos
+let consecCajasAbierto = true, consecCajasExp = {};
+function consecCajasToggle() { consecCajasAbierto = !consecCajasAbierto; consecRenderCajas(); }
+function consecCajaToggle(id) { consecCajasExp[id] = !consecCajasExp[id]; consecRenderCajas(); }
+function consecRenderCajas() {
+  const card = document.getElementById('consec-cajas-card'); if (!card) return;
+  const bs = bulAll().filter(function(b) { return b.fecha === consecSel.fecha && b.consec === consecSel.n; }).sort(function(a, b) { return a.num - b.num || (a.id < b.id ? -1 : 1); });
+  card.style.display = bs.length ? 'block' : 'none'; if (!bs.length) return;
+  document.getElementById('consec-cajas-titulo').textContent = '📦 Detalle por caja · ' + bs.length + (bs.length === 1 ? ' caja' : ' cajas');
+  document.getElementById('consec-cajas-arrow').innerHTML = consecCajasAbierto ? '&#9652;' : '&#9662;';
+  const lst = document.getElementById('consec-cajas-list'); lst.style.display = consecCajasAbierto ? 'flex' : 'none';
+  lst.innerHTML = bs.map(function(b) {
+    const cods = {}; b.items.forEach(function(it) { cods[it.cod] = 1; });
+    const uni = b.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0), ab = !!consecCajasExp[b.id];
+    const est = b.estado === 'abierto' ? '🟢 Abierto' : (b.estado === 'anulado' ? '🚫 Nulo' : '🔒 Cerrado');
+    let h = '<div style="border:1px solid #30363d;border-radius:10px;background:#0d1117"><div onclick="consecCajaToggle(\'' + b.id + '\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px">'
+      + '<div><div style="font-weight:800;color:#58a6ff;font-size:14px">📦 ' + trasEsc(b.id) + '</div><div style="font-size:12px;color:#8b949e;margin-top:2px">' + est + ' · ' + Object.keys(cods).length + ' artículos · ' + uni + ' unidades</div></div>'
+      + '<span style="font-size:16px;color:#58a6ff">' + (ab ? '&#9652;' : '&#9662;') + '</span></div>';
+    if (ab) {
+      h += '<div style="padding:0 12px 10px;display:flex;flex-direction:column;gap:6px">' + (b.items.length ? b.items.map(function(it) {
+        return '<div class="hist-item"><div class="hist-item-name">' + trasEsc(it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + trasEsc(it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + trasEsc(it.cantidad) + '</b></div><div class="hist-item-user" style="margin:4px 0 0">👤 ' + trasEsc(it.user) + ' · 🕐 ' + trasEsc(it.ts) + '</div></div>';
+      }).join('') : '<div style="font-size:12px;color:#7d8590">Esta caja aún no tiene productos.</div>')
+        + '<button type="button" class="mod-back-btn" style="margin:4px 0 0" onclick="bulAbrirDesdeConsec(\'' + b.id + '\')">📦 Abrir caja / etiqueta</button></div>';
+    }
+    return h + '</div>';
+  }).join('');
+}
+function bulAbrirDesdeConsec(id) { const b = bulGet(id); if (!b) return; switchTab('barcode'); bcPanel('bulto'); document.getElementById('bl-fecha').value = b.fecha; BUL_USER = '*'; BUL_SEL = id; bulRender(); }
 let consecAccAbierto = true;
 function consecAccAplicar() {
   const c = document.getElementById('consec-chips'), ar = document.getElementById('consec-acc-arrow');
@@ -4096,6 +4132,7 @@ function renderConsecList() {
     us.value = consecSel.user;
   }
   const hoy = consecSel.fecha === consecHoyKey(), yo = consecYo(), completo = USUARIOS_COMPLETOS.includes(yo);
+  try { consecRenderCajas(); } catch(e) { console.error('cajas', e); }
   const listCard = document.getElementById('consec-list-card');
   const emptyCard = document.getElementById('consec-empty-card');
   const itemsList = document.getElementById('consec-items-list');
@@ -8108,26 +8145,19 @@ function bulDeUsuario(b) { return BUL_USER === '*' || b.user === BUL_USER || b.i
 function bulAll() { try { return JSON.parse(localStorage.getItem('dimerc_bultos') || '[]'); } catch(e) { return []; } }
 function bulSet(a) { try { localStorage.setItem('dimerc_bultos', JSON.stringify(a)); } catch(e) {} }
 // Código único: B + DDMMAA + - + N° del día + 2 caracteres al azar (evita que dos equipos que crean un bulto a la vez repitan el código)
-// Genera el código de barra (bulto) del consecutivo que se está viendo: la caja queda enlazada a ese consecutivo, con sus productos
+// Generar con CB: crea una caja (bulto) NUEVA enlazada al consecutivo que se está viendo y abre la pantalla de bultos para capturar sus productos.
+// Al cerrar la caja, sus productos se agregan al final de ese consecutivo (el resto no se toca) y el detalle por caja queda en el registro de consecutivos.
 function consecGenerarCB() {
   const yo = consecYo(); if (!yo) { alert('Inicia sesión.'); return; }
   const fecha = consecSel.fecha, n = consecSel.n;
-  let b = bulAll().filter(function(x) { return x.fecha === fecha && x.consec === n && x.estado === 'cerrado'; })[0];
-  if (!b) {
-    const its = consecAll().filter(function(it) { return it.fecha === fecha && it.n === n; });
-    if (!its.length) { alert('El ' + consecNombre(fecha, n) + ' no tiene productos.'); return; }
-    if (!confirm('Generar el código de barra de ' + consecNombre(fecha, n) + ' (' + its.length + ' línea(s)). El consecutivo no se modifica. ¿Continuar?')) return;
-    const nums = bulAll().filter(function(x) { return x.fecha === fecha; }).map(function(x) { return x.num; });
-    const num = (nums.length ? Math.max.apply(null, nums) : 0) + 1; let id = bulCodigo(fecha, num); while (bulGet(id)) id = bulCodigo(fecha, num);
-    const bn = { id: id, fecha: fecha, num: num, estado: 'cerrado', consec: n, user: yo, items: its.map(function(it) { return { id: 'cc_' + it.id, cod: it.cod, desc: it.desc, cantidad: it.cantidad, ts: it.ts, _tsRaw: it._tsRaw, user: it.user }; }) };
-    const all = bulAll(); all.push(bn); bulSet(all);
-    bulEnc('—', 'Nuevo bulto', yo, 'bulto_nuevo', { bid: id, fecha: fecha, num: num });
-    bn.items.forEach(function(it) { try { window.encolarCambio(it.cod, it.desc, '—', '—', it.user, 'bulto_item', { bid: id, fecha: fecha, num: num, cid: it.id, cantidad: it.cantidad }, it._tsRaw || null); } catch(e) {} });
-    bulEnc('—', 'Bulto cerrado', yo, 'bulto_cerrar', { bid: id, n: n });
-    b = bn;
-  }
+  if (consecEsBorrado(fecha, n)) { alert('Ese consecutivo fue eliminado.'); return; }
+  const nums = bulAll().filter(function(x) { return x.fecha === fecha; }).map(function(x) { return x.num; });
+  const num = (nums.length ? Math.max.apply(null, nums) : 0) + 1; let id = bulCodigo(fecha, num); while (bulGet(id)) id = bulCodigo(fecha, num);
+  const all = bulAll(); all.push({ id: id, fecha: fecha, num: num, estado: 'abierto', consec: n, user: yo, items: [] }); bulSet(all);
+  bulEnc('—', 'Nuevo bulto', yo, 'bulto_nuevo', { bid: id, fecha: fecha, num: num, consec: n });
   switchTab('barcode'); bcPanel('bulto');
-  document.getElementById('bl-fecha').value = fecha; BUL_USER = '*'; BUL_SEL = b.id; bulRender();
+  document.getElementById('bl-fecha').value = fecha; BUL_USER = '*'; BUL_SEL = id; bulRender();
+  try { consecRefrescar(); } catch(e) {}
 }
 function bulCodigo(fecha, num) {
   const f = fecha.split('-'), A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -8141,7 +8171,7 @@ function blParse(v) {
 // Si se elimina un consecutivo, los bultos guardados en él quedan anulados (su etiqueta pasa a ser nula)
 function bulAnularPorConsec(fecha, n) {
   const all = bulAll(); let ch = false;
-  all.forEach(function(b) { if (b.fecha === fecha && b.consec === n && b.estado === 'cerrado') { b.estado = 'anulado'; ch = true; } });
+  all.forEach(function(b) { if (b.fecha === fecha && b.consec === n && b.estado !== 'anulado') { b.estado = 'anulado'; ch = true; } });
   if (ch) bulSet(all);
   return ch;
 }
@@ -8149,9 +8179,9 @@ function bulGet(id) { return bulAll().filter(function(b) { return b.id === id; }
 function bulEnc(cod, desc, user, tipo, extra) { try { window.encolarCambio(cod, desc, '—', '—', user, tipo, extra); } catch(e) { console.error('bulto no encolado', e); } }
 window.bultoAplicarCambio = function(d) {
   const all = bulAll();
-  const mk = function(id, fecha, num, user) { return { id: id, fecha: fecha, num: num, estado: 'abierto', consec: null, user: user, items: [] }; };
+  const mk = function(id, fecha, num, user, consec) { return { id: id, fecha: fecha, num: num, estado: 'abierto', consec: consec || null, user: user, items: [] }; };
   let b = all.filter(function(x) { return x.id === d.bid; })[0];
-  if (d.tipo === 'bulto_nuevo') { if (b) return false; all.push(mk(d.bid, d.fecha, d.num, d.user)); bulSet(all); return true; }
+  if (d.tipo === 'bulto_nuevo') { if (b) return false; all.push(mk(d.bid, d.fecha, d.num, d.user, d.consec)); bulSet(all); return true; }
   if (d.tipo === 'bulto_borrar') { const r = all.filter(function(x) { return x.id !== d.bid; }); if (r.length === all.length) return false; bulSet(r); return true; }
   if (!b) { if (d.tipo === 'bulto_item' && d.fecha) { b = mk(d.bid, d.fecha, d.num || 0, d.user); all.push(b); } else return false; }
   if (d.tipo === 'bulto_item') {
@@ -8216,12 +8246,13 @@ function bulRender() {
     const cods = {}; b.items.forEach(function(it) { cods[it.cod] = 1; });
     const uni = b.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0), anulado = b.estado === 'anulado', cerrado = b.estado === 'cerrado' || anulado;
     document.getElementById('bl-titulo').textContent = '📦 Bulto ' + b.id + (anulado ? ' · NULO' : '');
-    document.getElementById('bl-estado').textContent = anulado ? '🚫 Anulado: se eliminó su ' + consecNombre(b.fecha, b.consec) + '. La etiqueta ya no es válida.' : (cerrado ? '🔒 Guardado en ' + consecNombre(b.fecha, b.consec) : '🟢 Abierto') + ' · ' + Object.keys(cods).length + ' artículos · ' + uni + ' unidades';
+    document.getElementById('bl-estado').textContent = anulado ? '🚫 Anulado: se eliminó su ' + consecNombre(b.fecha, b.consec) + '. La etiqueta ya no es válida.' : (cerrado ? '🔒 Guardado en ' + consecNombre(b.fecha, b.consec) : '🟢 Abierto' + (b.consec ? ' · vinculado a ' + consecNombre(b.fecha, b.consec) : '')) + ' · ' + Object.keys(cods).length + ' artículos · ' + uni + ' unidades';
     document.getElementById('bl-acciones').style.display = anulado ? 'none' : '';
     document.getElementById('bl-preview-box').style.display = anulado ? 'none' : 'flex';
     try { document.getElementById('bl-svg-wrap').innerHTML = c128Svg(b.id, { mod: 2, h: 80, id: 'bl-svg' }); } catch(e) { document.getElementById('bl-svg-wrap').textContent = 'No se pudo dibujar el código'; }
     document.getElementById('bl-tam').value = blTam();
     document.getElementById('bl-preview-label').textContent = 'BODEGA DIMERC CONCEPCIÓN\nBULTO ' + b.id;
+    document.getElementById('bl-cerrar-btn').textContent = b.consec ? '🔒 Cerrar bulto (agregar al consecutivo)' : '🔒 Cerrar bulto (crear consecutivo)';
     document.getElementById('bl-add').style.display = cerrado ? 'none' : '';
     document.getElementById('bl-cerrar-btn').style.display = cerrado ? 'none' : '';
     document.getElementById('bl-borrar-btn').style.display = cerrado ? 'none' : '';
@@ -8276,8 +8307,9 @@ function bulBorrar() {
 function bulCerrar() {
   const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b || b.estado !== 'abierto') return;
   if (!b.items.length) { alert('El bulto no tiene productos.'); return; }
-  if (!confirm('Cerrar el bulto ' + b.id + ': se creará un consecutivo nuevo con sus ' + b.items.length + ' línea(s) y ya no podrá modificarse. ¿Continuar?')) return;
-  bulCerrarOk(0);
+  const txt = b.consec ? 'se agregarán sus ' + b.items.length + ' línea(s) al final de ' + consecNombre(b.fecha, b.consec) : 'se creará un consecutivo nuevo con sus ' + b.items.length + ' línea(s)';
+  if (!confirm('Cerrar el bulto ' + b.id + ': ' + txt + ' y ya no podrá modificarse. ¿Continuar?')) return;
+  bulCerrarOk(b.consec || 0);
 }
 function bulCerrarOk(n) {
   const b = BUL_SEL ? bulGet(BUL_SEL) : null, yo = consecYo(); if (!b || b.estado !== 'abierto') return;
