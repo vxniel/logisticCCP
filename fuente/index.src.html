@@ -3836,9 +3836,11 @@ function consecAll() {
 function consecSetAll(all) { localStorage.setItem('dimerc_consec', JSON.stringify(all)); sincPestanasProg(); }
 // Cualquier cambio en consecutivos o bultos refresca lo que esté a la vista (consecutivos, bultos y verificación): las pestañas quedan iguales
 let _spBusy = false;
+setTimeout(function() { try { consecRescatarHuerfanas(); } catch(e) {} }, 4000);
 function sincPestanas() {
   if (_spBusy) return; _spBusy = true;
   try {
+    consecRescatarHuerfanas();
     const c = document.getElementById('section-consec'); if (c && c.style.display !== 'none') renderConsecList();
     const sb = document.getElementById('section-barcode');
     if (sb && sb.style.display !== 'none') {
@@ -3864,7 +3866,32 @@ function consecNums(fecha) {
 }
 let consecSel = { fecha: null, user: '*', n: 1 };   // el consecutivo es COMPARTIDO por todos; user '*' = todos los usuarios (filtro de vista/exportación)
 function consecFechaEl() { return document.getElementById('consec-fecha'); }
-function consecUltimo() { const ns = consecNums(consecSel.fecha); consecSel.n = ns.length ? ns[ns.length - 1] : 1; }
+// Siguiente número libre de la fecha (nunca reutiliza un consecutivo eliminado: los demás equipos ignorarían sus líneas)
+function consecSiguiente(f) {
+  const ns = consecNums(f), mxB = Math.max.apply(null, [0].concat(consecBorr()[f] || []));
+  return Math.max(ns.length ? ns[ns.length - 1] : 0, mxB, consecMeta()[f] || 0) + 1;
+}
+function consecUltimo() { const ns = consecNums(consecSel.fecha); consecSel.n = ns.length ? ns[ns.length - 1] : consecSiguiente(consecSel.fecha); }
+// Rescata líneas que quedaron en un consecutivo ya eliminado (los otros equipos las ignoran y por eso no se sincronizaban):
+// las pasa a un consecutivo vigente y las vuelve a enviar a todos los equipos
+let _rescatando = false;
+function consecRescatarHuerfanas() {
+  if (_rescatando) return false; _rescatando = true; let hubo = false;
+  try {
+    const borr = consecBorr(), all = consecAll(), fechas = {};
+    all.forEach(function(x) { if ((borr[x.fecha] || []).indexOf(x.n) >= 0) fechas[x.fecha] = 1; });
+    Object.keys(fechas).forEach(function(f) {
+      const sig = consecSiguiente(f), mt = consecMeta(); mt[f] = Math.max(mt[f] || 0, sig); consecMetaSet(mt);
+      try { window.encolarCambio('—', 'Nuevo consecutivo', '—', '—', consecYo() || 'SISTEMA', 'consec_nuevo', { fecha: f, n: sig }); } catch(e) {}
+      const mover = all.filter(function(x) { return x.fecha === f && (borr[f] || []).indexOf(x.n) >= 0; });
+      mover.forEach(function(x) { x.n = sig; });
+      consecSetAll(all);
+      mover.forEach(function(x) { consecEncolar('consec', x); });
+      hubo = true;
+    });
+  } catch(e) { console.error('rescate de líneas', e); }
+  _rescatando = false; return hubo;
+}
 function consecInit() {
   const el = consecFechaEl(); if (!el) return;
   el.onchange = function() { consecSel.fecha = el.value || consecHoyKey(); consecUltimo(); renderConsecList(); };
@@ -4171,6 +4198,7 @@ function consecAddItem() {
   if (consecSel.fecha !== consecHoyKey()) { alert('Estás viendo otra fecha. Vuelve a la fecha de hoy para agregar productos.'); return; }
   const qty = parseInt(document.getElementById('consec-qty').value) || 1;
   if(qty < 1) { alert('La cantidad debe ser al menos 1.'); return; }
+  if (consecEsBorrado(consecSel.fecha, consecSel.n)) consecSel.n = consecSiguiente(consecSel.fecha);   // el visto fue eliminado: se agrega a uno nuevo
   const now = getOfficialNow();
   const item = {
     id: 'l_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
@@ -4265,7 +4293,8 @@ function renderConsecList() {
   const itemsList = document.getElementById('consec-items-list');
   const count = document.getElementById('consec-count');
   const chips = document.getElementById('consec-chips');
-  let ns = consecNums(consecSel.fecha); if (!ns.length) ns.push(1);
+  try { consecRescatarHuerfanas(); } catch(e) {}
+  let ns = consecNums(consecSel.fecha); if (!ns.length) ns.push(consecSiguiente(consecSel.fecha));
   if (consecSel.user !== '*') {   // con filtro de usuario solo se listan los consecutivos donde ese usuario tiene líneas
     const todos = consecAll(), del = ns.filter(function(n) { return todos.some(function(it) { return it.fecha === consecSel.fecha && it.n === n && it.user === consecSel.user; }); });
     if (del.length) ns = del;
