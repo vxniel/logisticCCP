@@ -3068,6 +3068,7 @@ function nuevoProductoSave() {
         <button class="mod-back-btn" onclick="exportConsecPDF()">📄 Exportar PDF (fecha y usuario)</button>
         <button class="mod-back-btn" onclick="exportConsecGuia()" style="border-color:#58a6ff;color:#58a6ff">📋 Registro picking (consecutivo seleccionado)</button>
         <button class="mod-back-btn" onclick="consecClearList()">🗑 Limpiar este consecutivo</button>
+        <button class="mod-back-btn" onclick="consecEliminar()" style="border-color:#f85149;color:#f85149">❌ Eliminar consecutivo</button>
       </div>
     </div>
 
@@ -3721,9 +3722,13 @@ function consecAll() {
 function consecSetAll(all) { localStorage.setItem('dimerc_consec', JSON.stringify(all)); }
 function consecMeta() { try { return JSON.parse(localStorage.getItem('dimerc_consec_meta') || '{}'); } catch(e) { return {}; } }
 function consecMetaSet(m) { localStorage.setItem('dimerc_consec_meta', JSON.stringify(m)); }
+function consecBorr() { try { return JSON.parse(localStorage.getItem('dimerc_consec_borr') || '{}'); } catch(e) { return {}; } }
+function consecEsBorrado(fecha, n) { return (consecBorr()[fecha] || []).indexOf(n) >= 0; }
+function consecMarcarBorrado(fecha, n) { const b = consecBorr(); b[fecha] = b[fecha] || []; if (b[fecha].indexOf(n) < 0) b[fecha].push(n); try { localStorage.setItem('dimerc_consec_borr', JSON.stringify(b)); } catch(e) {} }
 function consecNums(fecha) {
   const set = {}; consecAll().forEach(function(it) { if (it.fecha === fecha) set[it.n] = 1; });
   const mx = consecMeta()[fecha] || 0; for (let i = 1; i <= mx; i++) set[i] = 1;
+  (consecBorr()[fecha] || []).forEach(function(n) { delete set[n]; });
   return Object.keys(set).map(Number).sort(function(a, b) { return a - b; });
 }
 let consecSel = { fecha: null, user: '*', n: 1 };   // el consecutivo es COMPARTIDO por todos; user '*' = todos los usuarios (filtro de vista/exportación)
@@ -3737,7 +3742,7 @@ function consecInit() {
 }
 function consecNuevo() {
   if (consecSel.fecha !== consecHoyKey()) { alert('Solo puedes crear un consecutivo nuevo en la fecha de hoy.'); return; }
-  const ns = consecNums(consecSel.fecha), sig = (ns.length ? ns[ns.length - 1] : 0) + 1;
+  const ns = consecNums(consecSel.fecha), mxB = Math.max.apply(null, [0].concat(consecBorr()[consecSel.fecha] || [])), sig = Math.max(ns.length ? ns[ns.length - 1] : 0, mxB, consecMeta()[consecSel.fecha] || 0) + 1;
   const m = consecMeta(); m[consecSel.fecha] = sig; consecMetaSet(m);
   try { window.encolarCambio('—', 'Nuevo consecutivo', '—', '—', consecYo(), 'consec_nuevo', { fecha: consecSel.fecha, n: sig }); } catch(e) {}
   consecSel.n = sig; renderConsecList();
@@ -3824,7 +3829,15 @@ function consecEncolar(tipo, it) {
 }
 // Aplica un cambio recibido (de otro equipo o de la reproducción del registro)
 window.consecAplicarCambio = function(d) {
+  if (d.tipo === 'consec_borrar') {
+    const ya = consecEsBorrado(d.fecha, d.n);
+    consecMarcarBorrado(d.fecha, d.n);
+    const all = consecAll(), r = all.filter(function(x) { return !(x.fecha === d.fecha && x.n === d.n); });
+    if (r.length !== all.length) consecSetAll(r);
+    return !ya || r.length !== all.length;
+  }
   if (d.tipo === 'consec') {
+    if (consecEsBorrado(d.fecha, d.n)) return false;
     const all = consecAll();
     if (all.some(function(x) { return x.id === d.cid; })) return false;
     all.push({ id: d.cid, cod: d.cod, desc: d.desc, ubic: d.ubicP || d.a || '—', cantidad: d.cantidad, ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, fecha: d.fecha, n: d.n, user: d.user });
@@ -3921,6 +3934,37 @@ function consecRemoveItem(idx) {
   const act = getConsecList(), objetivo = act[idx]; if (!objetivo) return;
   if (objetivo.user !== consecYo() && !USUARIOS_COMPLETOS.includes(consecYo())) { alert('Solo puedes quitar los productos que agregaste tú.'); return; }
   consecQuitarPorId(objetivo.id);
+  renderConsecList();
+}
+
+// Eliminar un consecutivo completo (todos sus productos y su número), en todos los equipos. Pide la contraseña de la sesión.
+function consecEliminar() {
+  const yo = consecYo(), fecha = consecSel.fecha, n = consecSel.n;
+  if (!USUARIOS_COMPLETOS.includes(yo)) { alert('Solo los usuarios autorizados pueden eliminar un consecutivo.'); return; }
+  const cant = consecAll().filter(function(it) { return it.fecha === fecha && it.n === n; }).length;
+  let box = document.getElementById('consec-del-modal'); if (box) box.remove();
+  box = document.createElement('div'); box.id = 'consec-del-modal';
+  box.style.cssText = 'position:fixed;left:0;right:0;top:0;bottom:0;z-index:99998;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:14px';
+  box.innerHTML = '<div style="background:#0d1117;border:2px solid #f85149;border-radius:14px;padding:16px;max-width:420px;width:100%">'
+    + '<div style="font-size:16px;font-weight:800;color:#f85149;margin-bottom:6px">❌ Eliminar ' + consecNombre(fecha, n) + '</div>'
+    + '<div style="font-size:13px;color:#c9d1d9;margin-bottom:10px">Se borrarán sus ' + cant + ' línea(s) en todos los equipos. No se puede deshacer. Ingresa tu contraseña para confirmar.</div>'
+    + '<input id="consec-del-pass" type="password" autocomplete="off" placeholder="Contraseña" style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #30363d;background:#161b22;color:#e6edf3;font-size:16px">'
+    + '<div id="consec-del-err" style="color:#f85149;font-size:12px;min-height:16px;margin:6px 0"></div>'
+    + '<div style="display:flex;gap:8px"><button type="button" onclick="document.getElementById(\'consec-del-modal\').remove()" style="flex:1;padding:12px;border-radius:10px;border:1px solid #30363d;background:#161b22;color:#e6edf3;font-size:14px;cursor:pointer">Cancelar</button>'
+    + '<button type="button" onclick="consecEliminarOk()" style="flex:1;padding:12px;border-radius:10px;border:none;background:#f85149;color:#fff;font-size:14px;font-weight:800;cursor:pointer">Eliminar</button></div></div>';
+  document.body.appendChild(box);
+  try { document.getElementById('consec-del-pass').focus(); } catch(e) {}
+}
+function consecEliminarOk() {
+  const yo = consecYo(), fecha = consecSel.fecha, n = consecSel.n;
+  const inp = document.getElementById('consec-del-pass'), err = document.getElementById('consec-del-err');
+  const clave = (typeof USERS !== 'undefined' && USERS[yo]) || null;
+  if (!clave || !inp || inp.value !== String(clave)) { if (err) err.textContent = 'Contraseña incorrecta.'; if (inp) { inp.value = ''; inp.focus(); } return; }
+  const ev = { fecha: fecha, n: n };
+  const r = document.getElementById('consec-del-modal'); if (r) r.remove();
+  consecAplicarCambio({ tipo: 'consec_borrar', fecha: fecha, n: n });
+  try { window.encolarCambio('—', 'Consecutivo eliminado', '—', '—', yo, 'consec_borrar', ev); } catch(e) {}
+  consecUltimo(); consecMulti.sel = {};
   renderConsecList();
 }
 
@@ -4902,7 +4946,7 @@ function _setupFirebase() {
       // al día. 'stock' no se reaplica aquí: su estado vive en estado_stock.
       const esReplay = !!changeTs && changeTs < _fbStartTs - 5000;
       if (esReplay && d.tipo === 'stock') return;
-      if (d.tipo === 'consec' || d.tipo === 'consec_del' || d.tipo === 'consec_nuevo') {
+      if (d.tipo === 'consec' || d.tipo === 'consec_del' || d.tipo === 'consec_nuevo' || d.tipo === 'consec_borrar') {
         try { if (window.consecAplicarCambio(d)) consecRefrescar(); } catch(e) { console.error('consecutivo recibido falló', e); }
         return;
       }
@@ -5082,7 +5126,7 @@ function _setupFirebase() {
               Object.keys(todo).forEach(function(id) {
                 const d = todo[id]; if (!d || !d.cod || !d.ts) return;
                 if (new Date(d.ts).getTime() < _fbBaseTs) return;
-                if (d.tipo === 'consec' || d.tipo === 'consec_del' || d.tipo === 'consec_nuevo') { try { if (window.consecAplicarCambio(d)) recibidos++; } catch(e) {} return; }
+                if (d.tipo === 'consec' || d.tipo === 'consec_del' || d.tipo === 'consec_nuevo' || d.tipo === 'consec_borrar') { try { if (window.consecAplicarCambio(d)) recibidos++; } catch(e) {} return; }
                 if (d.tipo !== 'ubic' && d.tipo !== 'nuevo' && d.tipo !== 'stock') return;
                 const tt = new Date(d.ts).getTime(), aa = String(d.a||'').toUpperCase(), dde = String(d.de||'').toUpperCase();
                 const lst = (claves[d.cod] = claves[d.cod] || []);
