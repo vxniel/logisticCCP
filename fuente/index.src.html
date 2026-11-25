@@ -8309,8 +8309,11 @@ function bulSet(a) { try { localStorage.setItem('dimerc_bultos', JSON.stringify(
 // Al cerrar la caja, sus productos se agregan al final de ese consecutivo (el resto no se toca) y el detalle por caja queda en el registro de consecutivos.
 function consecGenerarCB() {
   const yo = consecYo(); if (!yo) { alert('Inicia sesión.'); return; }
-  const fecha = consecSel.fecha, n = consecSel.n;
-  if (consecEsBorrado(fecha, n)) { alert('Ese consecutivo fue eliminado.'); return; }
+  const fecha = consecSel.fecha; let n = consecSel.n;
+  if (consecEsBorrado(fecha, n) || !consecNums(fecha).length) {   // consecutivo eliminado / fecha sin consecutivos: se crea uno nuevo automáticamente
+    if (fecha !== consecHoyKey()) { alert('Esa fecha no tiene consecutivos vigentes y solo se pueden crear en la fecha de hoy.'); return; }
+    consecNuevo(); n = consecSel.n;
+  }
   const nums = bulAll().filter(function(x) { return x.fecha === fecha; }).map(function(x) { return x.num; });
   const num = (nums.length ? Math.max.apply(null, nums) : 0) + 1; let id = bulCodigo(fecha, num); while (bulGet(id)) id = bulCodigo(fecha, num);
   const all = bulAll(); all.push({ id: id, fecha: fecha, num: num, estado: 'abierto', consec: n, user: yo, items: [] }); bulSet(all);
