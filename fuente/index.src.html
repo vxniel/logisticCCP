@@ -4125,7 +4125,7 @@ function getConsecGrupos() {
   const nums = {}; all.forEach(function(it) { nums[it.n] = 1; });
   return Object.keys(nums).map(Number).sort(function(a, b) { return a - b; }).map(function(n) {
     return { n: n, nombre: consecNombre(consecSel.fecha, n), rows: all.filter(function(it) { return it.n === n; }).map(function(it) {
-      return { Codigo: it.cod, Producto: it.desc, Cantidad: it.cantidad, Fecha: it.ts, Usuario: it.user };
+      return { Codigo: it.cod, Producto: it.desc, Cantidad: it.cantidad, Fecha: it.ts, Usuario: it.user, Bulto: it.bulto || '' };
     }) };
   });
 }
@@ -4142,7 +4142,7 @@ function exportConsecExcel() {
     const rows = g.rows;
     const ws = XLSX.utils.aoa_to_sheet([[g.nombre + '  ·  ' + rows.length + (rows.length === 1 ? ' producto' : ' productos') + ' · ' + rows.reduce(function(a, r) { return a + (parseInt(r.Cantidad, 10) || 0); }, 0) + ' uni.'], []]);
     XLSX.utils.sheet_add_json(ws, rows, { origin: 'A3' });
-    ws['!cols'] = [{wch:12},{wch:50},{wch:10},{wch:22},{wch:14}];
+    ws['!cols'] = [{wch:12},{wch:50},{wch:10},{wch:22},{wch:14},{wch:16}];
     XLSX.utils.sheet_add_aoa(ws, [['By: Vxniel']], { origin: 'A' + (rows.length + 5) });
     let nom = ('Consec (' + g.n + ')').replace(/[\\/?*\[\]:]/g, '').slice(0, 31); while (usados[nom]) nom = nom.slice(0, 29) + '_' + Math.floor(Math.random() * 9);
     usados[nom] = 1; XLSX.utils.book_append_sheet(wb, ws, nom);
@@ -4166,12 +4166,12 @@ function exportConsecPDF() {
     doc.text(g.nombre + '  ·  ' + g.rows.length + (g.rows.length === 1 ? ' producto' : ' productos'), 30, y0);
     doc.autoTable({
       startY: y0 + 6,
-      head: [['Código','Producto','Cantidad','Fecha','Usuario']],
-      body: g.rows.map(r => [r.Codigo, r.Producto, r.Cantidad, r.Fecha, r.Usuario]),
+      head: [['Código','Producto','Cantidad','Fecha','Usuario','Bulto']],
+      body: g.rows.map(r => [r.Codigo, r.Producto, r.Cantidad, r.Fecha, r.Usuario, r.Bulto]),
       styles: { fontSize: 7.5, cellPadding: 4, valign: 'middle', overflow: 'linebreak' },
       headStyles: { fillColor: [31, 56, 84], fontSize: 8, halign: 'center' },
       bodyStyles: { minCellHeight: 14 },
-      columnStyles: { 0: { cellWidth: 60, halign: 'center' }, 1: { cellWidth: 330 }, 2: { cellWidth: 65, halign: 'center' }, 3: { cellWidth: 100 }, 4: { cellWidth: 80 } },
+      columnStyles: { 0: { cellWidth: 55, halign: 'center' }, 1: { cellWidth: 270 }, 2: { cellWidth: 55, halign: 'center' }, 3: { cellWidth: 95 }, 4: { cellWidth: 65 }, 5: { cellWidth: 70, halign: 'center' } },
       margin: { left: 30, right: 30 }
     });
     y0 = doc.lastAutoTable.finalY + 24;
@@ -8057,10 +8057,14 @@ function bcImprimir() {
 let BUL_SEL = null, BUL_PROD = null, BUL_GUIA = {};
 function bulAll() { try { return JSON.parse(localStorage.getItem('dimerc_bultos') || '[]'); } catch(e) { return []; } }
 function bulSet(a) { try { localStorage.setItem('dimerc_bultos', JSON.stringify(a)); } catch(e) {} }
-function bulCodigo(fecha, num) { const f = fecha.split('-'); return 'B' + f[2] + f[1] + String(f[0]).slice(2) + '-' + (num < 10 ? '0' + num : num); }
+// Código único: B + DDMMAA + - + N° del día + 2 caracteres al azar (evita que dos equipos que crean un bulto a la vez repitan el código)
+function bulCodigo(fecha, num) {
+  const f = fecha.split('-'), A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return 'B' + f[2] + f[1] + String(f[0]).slice(2) + '-' + (num < 10 ? '0' + num : num) + A.charAt(Math.floor(Math.random() * A.length)) + A.charAt(Math.floor(Math.random() * A.length));
+}
 // Interpreta un código de bulto escaneado → {id, fecha, num} o null
 function blParse(v) {
-  const m = /^B(\d{2})(\d{2})(\d{2})-(\d{2,3})$/i.exec(String(v || '').trim());
+  const m = /^B(\d{2})(\d{2})(\d{2})-(\d{2,3})([A-Z0-9]{2})?$/i.exec(String(v || '').trim());
   return m ? { id: m[0].toUpperCase(), fecha: '20' + m[3] + '-' + m[2] + '-' + m[1], num: parseInt(m[4], 10) } : null;
 }
 function bulGet(id) { return bulAll().filter(function(b) { return b.id === id; })[0] || null; }
@@ -8096,7 +8100,7 @@ function bcPanel(cual) {
 function bulNuevo() {
   const yo = consecYo(); if (!yo) { alert('Inicia sesión.'); return; }
   const fecha = consecHoyKey(), nums = bulAll().filter(function(b) { return b.fecha === fecha; }).map(function(b) { return b.num; });
-  const num = (nums.length ? Math.max.apply(null, nums) : 0) + 1, id = bulCodigo(fecha, num);
+  const num = (nums.length ? Math.max.apply(null, nums) : 0) + 1; let id = bulCodigo(fecha, num); while (bulGet(id)) id = bulCodigo(fecha, num);
   const all = bulAll(); all.push({ id: id, fecha: fecha, num: num, estado: 'abierto', consec: null, user: yo, items: [] }); bulSet(all);
   bulEnc('—', 'Nuevo bulto', yo, 'bulto_nuevo', { bid: id, fecha: fecha, num: num });
   document.getElementById('bl-fecha').value = fecha; BUL_SEL = id; bulRender();
@@ -8111,7 +8115,7 @@ function bulScan(v) {
 function bulIcono(b) { return b.estado === 'cerrado' ? '🔒' : '🟢'; }
 function bulRender() {
   const f = document.getElementById('bl-fecha').value || consecHoyKey();
-  const lista = bulAll().filter(function(b) { return b.fecha === f; }).sort(function(a, b) { return a.num - b.num; });
+  const lista = bulAll().filter(function(b) { return b.fecha === f; }).sort(function(a, b) { return a.num - b.num || (a.id < b.id ? -1 : 1); });
   if (BUL_SEL && !lista.some(function(b) { return b.id === BUL_SEL; })) BUL_SEL = null;
   if (!BUL_SEL && lista.length) BUL_SEL = lista[lista.length - 1].id;
   document.getElementById('bl-chips').innerHTML = lista.length ? lista.map(function(b) {
