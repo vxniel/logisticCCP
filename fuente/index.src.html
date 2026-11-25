@@ -3004,9 +3004,10 @@ function nuevoProductoSave() {
       <div id="consec-estado" style="font-size:12px;color:#8b949e;margin:6px 0"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
         <button class="mod-back-btn" style="margin:0" onclick="sincronizarAhora(this)">🔄 Sincronizar ahora</button>
-        <div class="sbox" style="flex:1;min-width:200px;margin:0"><span class="sico">🔍</span><input id="consec-bsc" type="text" placeholder="Escanea o digita el código del bulto..." autocomplete="off" autocapitalize="characters" oninput="consecBuscarBulto(this.value,false)" onkeydown="if(event.keyCode===13){consecBuscarBulto(this.value,true);}"/></div>
+        <div class="sbox" style="flex:1;min-width:200px;margin:0"><span class="sico">🔍</span><input id="consec-bsc" type="text" placeholder="Buscar: bulto, código, código de barra o producto..." autocomplete="off" autocapitalize="characters" oninput="consecBuscarBulto(this.value,false)" onkeydown="if(event.keyCode===13){consecBuscarBulto(this.value,true);}"/></div>
       </div>
       <div id="consec-bsc-msg" style="font-size:12px;color:#8b949e;margin:0 0 6px;display:none"></div>
+      <div id="consec-bsc-res" style="display:none;margin:0 0 8px;max-height:60vh;overflow-y:auto"></div>
       <div class="mod-step-desc" style="margin:8px 0 6px">📅 Fecha</div>
       <div class="sbox"><span class="sico">📅</span><input id="consec-fecha" type="date"/></div>
       <div class="mod-step-desc" style="margin:10px 0 6px">👤 Filtrar / exportar por usuario</div>
@@ -3999,26 +4000,72 @@ function bulListaEditar(id) {
 }
 // Buscador: al escanear/digitar un bulto salta a su fecha y consecutivo y deja la caja desplegada con sus productos
 function consecBscMsg(t, col) { const m = document.getElementById('consec-bsc-msg'); if (!m) return; m.style.display = t ? 'block' : 'none'; m.style.color = col || '#8b949e'; m.textContent = t || ''; }
+// Buscar un producto (código, código de barra o descripción) en TODOS los consecutivos: dónde se pickeó y en qué consecutivo/bulto quedó
+function consecBscRes(html) { const r = document.getElementById('consec-bsc-res'); if (!r) return; r.style.display = html ? 'block' : 'none'; r.innerHTML = html || ''; }
+function consecBuscarProd(raw, enter) {
+  const q = String(raw || '').trim().toUpperCase(); if (!q) { consecBscRes(''); return; }
+  const numerico = /^\d+$/.test(q.replace(/\s+/g, '')), qn = q.replace(/\s+/g, '');
+  if (!enter && q.length < 3) { consecBscRes(''); return; }
+  const cods = {};
+  if (numerico) {
+    cods[qn] = 1;
+    try { (BIDX[qn] || []).forEach(function(i) { if (DATA[i]) cods[DATA[i].cod] = 1; }); } catch(e) {}   // código de barra → código de producto
+  }
+  const coincide = function(cod, desc) {
+    cod = String(cod); 
+    if (numerico) return !!cods[cod] || (qn.length >= 4 && qn.length < 7 && cod.indexOf(qn) === 0);
+    return String(desc || '').toUpperCase().indexOf(q) >= 0;
+  };
+  const E = trasEsc, grupos = {};
+  consecAll().forEach(function(x) {
+    if (consecEsBorrado(x.fecha, x.n) || !coincide(x.cod, x.desc)) return;
+    const k = x.fecha + '|' + x.n; (grupos[k] = grupos[k] || { fecha: x.fecha, n: x.n, l: [] }).l.push(x);
+  });
+  const sueltos = [];   // cajas abiertas aún sin pasar a un consecutivo
+  bulAll().forEach(function(b) { if (b.estado === 'abierto') b.items.forEach(function(it) { if (coincide(it.cod, it.desc)) sueltos.push({ b: b, it: it }); }); });
+  const gs = Object.keys(grupos).map(function(k) { return grupos[k]; }).sort(function(a, b) { return a.fecha < b.fecha ? 1 : (a.fecha > b.fecha ? -1 : b.n - a.n); });
+  let nl = 0, nu = 0; gs.forEach(function(g) { g.l.forEach(function(x) { nl++; nu += parseInt(x.cantidad, 10) || 0; }); });
+  if (!gs.length && !sueltos.length) { consecBscRes('<div style="border:1px solid #30363d;border-radius:10px;padding:10px 12px;background:#0d1117;font-size:13px;color:#d29922">🔎 <b>' + E(q) + '</b>: no aparece en ningún consecutivo (aún no se ha pickeado).</div>'); return; }
+  let h = '<div style="border:1px solid #30363d;border-radius:10px;padding:10px 12px;background:#0d1117"><div style="font-size:13px;font-weight:800;color:#58a6ff;margin-bottom:8px">🔎 ' + E(q) + ' · ' + nl + (nl === 1 ? ' línea' : ' líneas') + ' en ' + gs.length + (gs.length === 1 ? ' consecutivo' : ' consecutivos') + ' · ' + nu + ' uni.</div><div style="display:flex;flex-direction:column;gap:8px">';
+  gs.slice(0, 40).forEach(function(g) {
+    const u = g.l.reduce(function(a, x) { return a + (parseInt(x.cantidad, 10) || 0); }, 0);
+    h += '<div><button type="button" class="jaula-btn" style="margin:0;width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px" onclick="consecIrA(\'' + g.fecha + '\',' + g.n + ')"><span>📍 ' + E(consecNombre(g.fecha, g.n)) + '</span><span style="font-size:11px;font-weight:600;opacity:.8">' + g.l.length + ' lín. · ' + u + ' uni.</span></button><div style="display:flex;flex-direction:column;gap:5px;margin-top:5px">'
+      + g.l.slice(0, 30).map(function(x) {
+        return '<div class="hist-item"><div class="hist-item-name">' + E(x.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + E(x.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + E(x.cantidad) + '</b>' + (x.bulto ? ' · 📦 <b style="color:#58a6ff">' + E(x.bulto) + '</b>' : '') + '</div><div class="hist-item-user" style="margin:4px 0 0">👤 ' + E(x.user) + ' · 🕐 ' + E(x.ts) + '</div></div>';
+      }).join('') + '</div></div>';
+  });
+  if (gs.length > 40) h += '<div style="font-size:12px;color:#8b949e">…y ' + (gs.length - 40) + ' consecutivos más (afina la búsqueda).</div>';
+  if (sueltos.length) h += '<div style="font-size:12px;color:#d29922;margin-top:4px">📦 En cajas abiertas, aún sin consecutivo cerrado:</div>' + sueltos.slice(0, 20).map(function(s) {
+    return '<div class="hist-item"><div class="hist-item-name">' + E(s.it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + E(s.it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + E(s.it.cantidad) + '</b> · 📦 <b style="color:#58a6ff">' + E(s.b.id) + '</b> 🟢 abierto' + (s.b.consec ? ' → ' + E(consecNombre(s.b.fecha, s.b.consec)) : '') + '</div><div class="hist-item-user" style="margin:4px 0 0">👤 ' + E(s.it.user) + ' · 🕐 ' + E(s.it.ts) + '</div></div>';
+  }).join('');
+  consecBscRes(h + '</div></div>');
+}
+function consecIrA(fecha, n) {
+  consecSel.fecha = fecha; consecSel.n = n; consecMulti.on = false; consecMulti.sel = {};
+  const fe = consecFechaEl(); if (fe) fe.value = fecha;
+  consecAccAbierto = true; renderConsecList();
+  try { const el = document.getElementById('consec-items-list'); if (el) el.scrollIntoView({ block: 'start' }); } catch(e) {}
+}
 function consecBuscarBulto(v, enter) {
-  const q = String(v || '').trim().toUpperCase().replace(/\s+/g, ''); if (!q) { consecBscMsg(''); return; }
+  const q = String(v || '').trim().toUpperCase().replace(/\s+/g, ''); if (!q) { consecBscMsg(''); consecBscRes(''); return; }
   let b = bulGet(q), porProd = false;
-  if (!b) {
+  if (!b && /^B\d/.test(q)) {
     const c = bulAll().filter(function(x) { return x.id.indexOf(q) === 0; });
     if (c.length === 1 && (enter || blParse(q))) b = c[0];
     else if (c.length > 1) { consecBscMsg('Hay ' + c.length + ' bultos que empiezan así: completa el código.', '#d29922'); return; }
   }
-  if (!b && enter) {
-    const c = bulAll().filter(function(x) { return x.items.some(function(it) { return String(it.cod).toUpperCase() === q || String(it.desc || '').toUpperCase().indexOf(q) >= 0; }); });
-    if (c.length) { b = c.sort(function(a, z) { return a.fecha < z.fecha ? 1 : -1; })[0]; porProd = c.length; }
+  if (!b) {
+    if (blParse(q)) { if (enter || /-\d{2,3}[A-Z0-9]{2}$/.test(q)) consecBscMsg('❌ No se encontró ese bulto en este equipo.', '#f85149'); return; }
+    consecBscMsg(''); consecBuscarProd(v, enter); return;
   }
-  if (!b) { if (enter || blParse(q)) consecBscMsg('❌ No se encontró ese bulto en este equipo.', '#f85149'); return; }
+  consecBscRes('');
   document.getElementById('consec-bsc').value = '';
   consecSel.fecha = b.fecha; const fe = consecFechaEl(); if (fe) fe.value = b.fecha;
   consecMulti.on = false; consecMulti.sel = {};
   if (b.consec) consecSel.n = b.consec; else consecUltimo();
   consecAccAbierto = true; consecCajasExp = {}; consecCajasExp[b.id] = true;
   renderConsecList();
-  consecBscMsg(b.consec ? '📍 ' + b.id + ' → ' + consecNombre(b.fecha, b.consec) + (porProd > 1 ? ' (producto en ' + porProd + ' bultos; se muestra el más reciente)' : '') : '📍 ' + b.id + ' está abierto y aún sin consecutivo (' + consecFmtFecha(b.fecha) + ').', '#3fb950');
+  consecBscMsg(b.consec ? '📍 ' + b.id + ' → ' + consecNombre(b.fecha, b.consec) + '' : '📍 ' + b.id + ' está abierto y aún sin consecutivo (' + consecFmtFecha(b.fecha) + ').', '#3fb950');
   try { const el = document.getElementById('consec-chips'); if (el) el.scrollIntoView({ block: 'start' }); } catch(e) {}
 }
 function bulVincular(id) {
