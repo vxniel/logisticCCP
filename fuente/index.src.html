@@ -3506,6 +3506,12 @@ function nuevoProductoSave() {
 <div id="section-barcode" style="display:none">
   <div class="mod-wrap">
 
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button type="button" id="bc-tab-barra" class="jaula-btn active" style="flex:1;margin:0" onclick="bcPanel('barra')">🏷️ Código de barra</button>
+      <button type="button" id="bc-tab-bulto" class="jaula-btn" style="flex:1;margin:0" onclick="bcPanel('bulto')">📦 Código bulto</button>
+    </div>
+
+    <div id="bc-panel-barra">
     <div class="mod-card">
       <div class="mod-step-label">🏷️ Generar código de barra</div>
       <div class="mod-step-desc">Genera e imprime una etiqueta de código de barra: ingresa el valor, un texto opcional y el estándar.</div>
@@ -3544,6 +3550,38 @@ function nuevoProductoSave() {
         <button class="mod-back-btn" onclick="bcImprimir()">🖨️ Imprimir</button>
       </div>
     </div>
+    </div><!-- /bc-panel-barra -->
+
+    <div id="bc-panel-bulto" style="display:none">
+      <div class="mod-card">
+        <div class="mod-step-label">📦 Generar código de bulto</div>
+        <div class="mod-step-desc">Elige un consecutivo y genera el código de barra de su bulto. Al escanearlo en Listar Consecutivo, la app abre ese consecutivo.</div>
+      </div>
+      <div class="mod-card">
+        <div class="mod-step-desc" style="margin-bottom:6px">📅 Fecha</div>
+        <div class="lfield"><input id="bl-fecha" type="date" onchange="blRender()"/></div>
+        <div class="mod-step-desc" style="margin:10px 0 6px">Consecutivo (toca uno)</div>
+        <div id="bl-chips" style="display:flex;flex-wrap:wrap"></div>
+        <div id="bl-resumen" style="font-size:12px;color:#58a6ff;margin:6px 0 10px"></div>
+        <div style="display:flex;gap:10px">
+          <div style="flex:1"><div class="mod-step-desc" style="margin-bottom:6px">N° de bulto</div><div class="sbox"><input id="bl-nbulto" type="number" min="1" value="1" inputmode="numeric"/></div></div>
+          <div style="flex:1"><div class="mod-step-desc" style="margin-bottom:6px">Total bultos (opcional)</div><div class="sbox"><input id="bl-total" type="number" min="1" inputmode="numeric" placeholder="Ej: 3"/></div></div>
+        </div>
+        <div id="bl-err" style="font-size:12px;color:#f85149;margin-top:8px;display:none"></div>
+        <button class="mod-confirm-btn" onclick="blGenerar()">✔ Generar código de bulto</button>
+      </div>
+      <div class="mod-card" id="bl-preview-card" style="display:none">
+        <div class="mod-step-desc" style="margin-bottom:6px">Vista previa</div>
+        <div class="bc-preview-box" id="bl-preview-box">
+          <div class="bc-preview-label" id="bl-preview-label" style="white-space:pre-line;text-align:center"></div>
+          <div class="bc-preview-svg-wrap"><svg id="bl-svg"></svg></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <button class="mod-back-btn" onclick="bcDescargarPNG('bl-svg','bl-preview-label',BL_ULTIMO)">📥 Descargar PNG</button>
+          <button class="mod-back-btn" onclick="blImprimir()">🖨️ Imprimir</button>
+        </div>
+      </div>
+    </div><!-- /bc-panel-bulto -->
 
   </div>
 </div><!-- /section-barcode -->
@@ -3880,6 +3918,15 @@ function consecClear() {
 function consecSearchProduct(v) {
   const preview = document.getElementById('consec-product-preview');
   const qtyRow = document.getElementById('consec-qty-row');
+  const bl = blParse(v);   // código de bulto escaneado: abre el consecutivo enlazado
+  if (bl) {
+    if (consecNums(bl.fecha).indexOf(bl.n) < 0) { preview.innerHTML = '<div class="mod-product-preview" style="background:#2a0f0f;border-color:#f85149"><div style="color:#f85149;font-size:13px;font-weight:700">⚠️ Ese bulto apunta a un consecutivo que ya no existe</div></div>'; preview.style.display = 'block'; qtyRow.style.display = 'none'; consecCurrentProduct = null; return; }
+    consecSel.fecha = bl.fecha; consecSel.n = bl.n; consecSel.user = '*'; consecMulti.on = false;
+    const fe = consecFechaEl(); if (fe) fe.value = bl.fecha;
+    consecClear(); renderConsecList();
+    try { (window.showToast || function() {})('📦 Bulto ' + bl.bulto + ' → ' + consecNombre(bl.fecha, bl.n)); } catch(e) {}
+    return;
+  }
   if(!v) { preview.style.display='none'; qtyRow.style.display='none'; consecCurrentProduct=null; return; }
   const qq = v.toLowerCase();
 
@@ -7908,10 +7955,10 @@ function bcGenerar() {
   document.getElementById('bc-preview-box').style.display = 'flex';
 }
 // Convierte el SVG actual a PNG (con la etiqueta de texto dibujada encima) y lo descarga
-function bcDescargarPNG() {
-  const svg = document.getElementById('bc-svg');
+function bcDescargarPNG(svgId, lblId, nombre) {
+  const svg = document.getElementById(svgId || 'bc-svg');
   if (!svg || !svg.innerHTML.trim()) { alert('Primero genera un código de barra.'); return; }
-  const etiqueta = document.getElementById('bc-preview-label').textContent || '';
+  const etiqueta = (document.getElementById(lblId || 'bc-preview-label').textContent || '').split('\n')[0];
   const svgData = new XMLSerializer().serializeToString(svg);
   const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(svgBlob);
@@ -7936,7 +7983,7 @@ function bcDescargarPNG() {
     canvas.toBlob(function(blob) {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `codigo_barra_${(document.getElementById('bc-valor').value||'etiqueta').trim()}.png`;
+      a.download = `codigo_barra_${nombre || (document.getElementById('bc-valor').value||'etiqueta').trim()}.png`;
       a.click();
     });
   };
@@ -7950,6 +7997,59 @@ function bcImprimir() {
   printArea.innerHTML = box.outerHTML;
   window.print();
   setTimeout(() => { printArea.innerHTML = ''; }, 300);
+}
+
+// ===== Código de bulto (enlazado a un consecutivo): B + DDMMAA + C + N° consecutivo + - + N° bulto =====
+let BL_SEL = { fecha: null, n: null }, BL_ULTIMO = 'bulto';
+function bcPanel(cual) {
+  const b = cual === 'bulto';
+  document.getElementById('bc-panel-barra').style.display = b ? 'none' : '';
+  document.getElementById('bc-panel-bulto').style.display = b ? '' : 'none';
+  document.getElementById('bc-tab-barra').classList.toggle('active', !b);
+  document.getElementById('bc-tab-bulto').classList.toggle('active', b);
+  if (b) { const f = document.getElementById('bl-fecha'); if (!f.value) f.value = consecHoyKey(); blRender(); }
+}
+function blCodigo(fecha, n, bulto) { const [y, m, d] = fecha.split('-'); return 'B' + d + m + String(y).slice(2) + 'C' + n + '-' + bulto; }
+// Interpreta un código de bulto escaneado; devuelve {fecha,n,bulto} o null
+function blParse(v) {
+  const m = /^B(\d{2})(\d{2})(\d{2})C(\d+)-(\d+)$/i.exec(String(v || '').trim());
+  return m ? { fecha: '20' + m[3] + '-' + m[2] + '-' + m[1], n: parseInt(m[4], 10), bulto: parseInt(m[5], 10) } : null;
+}
+function blRender() {
+  const f = document.getElementById('bl-fecha').value || consecHoyKey(); BL_SEL.fecha = f;
+  const ns = consecNums(f);
+  if (BL_SEL.n == null || ns.indexOf(BL_SEL.n) < 0) BL_SEL.n = ns.length ? ns[ns.length - 1] : null;
+  document.getElementById('bl-chips').innerHTML = ns.length ? ns.map(function(n) {
+    return '<button type="button" class="jaula-btn ' + (BL_SEL.n === n ? 'active' : '') + '" style="margin:0 6px 6px 0" onclick="BL_SEL.n=' + n + ';blRender()">' + consecNombre(f, n) + '</button>';
+  }).join('') : '<div style="font-size:12px;color:#7d8590">No hay consecutivos en esa fecha.</div>';
+  const its = BL_SEL.n == null ? [] : consecAll().filter(function(it) { return it.fecha === f && it.n === BL_SEL.n; });
+  const cods = {}; its.forEach(function(it) { cods[it.cod] = 1; });
+  document.getElementById('bl-resumen').textContent = BL_SEL.n == null ? '' : Object.keys(cods).length + ' artículos · ' + its.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0) + ' unidades';
+}
+function blGenerar() {
+  const err = document.getElementById('bl-err'); err.style.display = 'none';
+  const f = BL_SEL.fecha || consecHoyKey(), n = BL_SEL.n;
+  const fail = function(t) { err.textContent = t; err.style.display = 'block'; };
+  if (n == null) { fail('Elige un consecutivo.'); return; }
+  const nb = parseInt(document.getElementById('bl-nbulto').value, 10) || 0, tot = parseInt(document.getElementById('bl-total').value, 10) || 0;
+  if (nb < 1) { fail('Indica el N° de bulto (1 o más).'); return; }
+  if (tot && nb > tot) { fail('El N° de bulto no puede ser mayor al total de bultos.'); return; }
+  const its = consecAll().filter(function(it) { return it.fecha === f && it.n === n; }), cods = {}; its.forEach(function(it) { cods[it.cod] = 1; });
+  const art = Object.keys(cods).length, uni = its.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0);
+  const codigo = blCodigo(f, n, nb); BL_ULTIMO = codigo;
+  let ok = true;
+  try { JsBarcode(document.getElementById('bl-svg'), codigo, { format: 'CODE128', lineColor: '#000', width: 2, height: 80, displayValue: true, fontSize: 16, margin: 10, valid: function(v) { ok = v; } }); } catch(e) { ok = false; }
+  if (!ok) { fail('No se pudo generar el código.'); return; }
+  document.getElementById('bl-preview-label').textContent = 'BODEGA DIMERC CONCEPCIÓN\nBULTO ' + nb + (tot ? ' de ' + tot : '') + ' · ' + consecNombre(f, n) + (art ? '\n' + art + ' artículos · ' + uni + ' unidades' : '');
+  document.getElementById('bl-preview-card').style.display = 'block';
+  document.getElementById('bl-preview-box').style.display = 'flex';
+}
+function blImprimir() {
+  const box = document.getElementById('bl-preview-box');
+  if (!box || !document.getElementById('bl-svg').innerHTML.trim()) { alert('Primero genera un código de bulto.'); return; }
+  const printArea = document.getElementById('bc-print-area');
+  printArea.innerHTML = box.outerHTML; window.print();
+  setTimeout(function() { printArea.innerHTML = ''; }, 300);
 }
 
 // ===== Trazabilidad (historial de ubicaciones/stock por producto) =====
