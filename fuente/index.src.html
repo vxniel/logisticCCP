@@ -3555,7 +3555,7 @@ function nuevoProductoSave() {
     <div id="bc-panel-bulto" style="display:none">
       <div class="mod-card">
         <div class="mod-step-label">📦 Bultos (cajas Dimerc)</div>
-        <div class="mod-step-desc">1) Crea el bulto y pega su código de barra en la caja · 2) Asigna los productos · 3) Ciérralo: pasa a un consecutivo · 4) Emite la guía de despacho.</div>
+        <div class="mod-step-desc">1) Crea el bulto y pega su código de barra en la caja · 2) Asigna los productos · 3) Guárdalo: queda un consecutivo por caja · 4) Emite la guía de despacho.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           <button class="mod-confirm-btn" style="margin:0;flex:1" onclick="bulNuevo()">➕ Nuevo bulto</button>
         </div>
@@ -3575,6 +3575,7 @@ function nuevoProductoSave() {
           <div class="bc-preview-label" id="bl-preview-label" style="white-space:pre-line;text-align:center"></div>
           <div class="bc-preview-svg-wrap" id="bl-svg-wrap"></div>
         </div>
+        <div id="bl-acciones">
         <div class="mod-step-desc" style="margin:10px 0 6px">📐 Tamaño de etiqueta (impresora Zebra)</div>
         <select id="bl-tam" onchange="blSetTam(this.value)" style="width:100%;height:46px;padding:0 12px;box-sizing:border-box;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:15px">
           <option value="100x150">100 × 150 mm (4 × 6 pulg.)</option>
@@ -3588,6 +3589,7 @@ function nuevoProductoSave() {
           <button class="mod-back-btn" onclick="blCopiarZPL()">📋 Copiar ZPL</button>
           <button class="mod-back-btn" onclick="bcDescargarPNG('bl-svg','bl-preview-label',BUL_SEL)">📥 PNG</button>
         </div>
+        </div>
         <div id="bl-add" style="margin-top:14px">
           <div class="mod-step-desc" style="margin-bottom:6px">➕ Asignar producto al bulto</div>
           <div class="sbox"><span class="sico">🔢</span><input id="bl-cod" type="text" placeholder="Código o código de barra del producto..." autocomplete="off" oninput="bulBuscarProd(this.value)"/></div>
@@ -3599,7 +3601,7 @@ function nuevoProductoSave() {
         </div>
         <div id="bl-items" style="display:flex;flex-direction:column;gap:7px;margin-top:12px"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-          <button class="mod-confirm-btn" id="bl-cerrar-btn" style="margin:0;flex:1" onclick="bulCerrar()">🔒 Cerrar bulto y pasar a consecutivo</button>
+          <button class="mod-confirm-btn" id="bl-cerrar-btn" style="margin:0;flex:1" onclick="bulCerrar()">💾 Guardar bulto (crea su consecutivo)</button>
           <button class="mod-back-btn" id="bl-borrar-btn" style="margin:0;border-color:#f85149;color:#f85149" onclick="bulBorrar()">🗑 Eliminar bulto</button>
         </div>
       </div>
@@ -3903,7 +3905,8 @@ window.consecAplicarCambio = function(d) {
     consecMarcarBorrado(d.fecha, d.n);
     const all = consecAll(), r = all.filter(function(x) { return !(x.fecha === d.fecha && x.n === d.n); });
     if (r.length !== all.length) consecSetAll(r);
-    return !ya || r.length !== all.length;
+    let anul = false; try { anul = bulAnularPorConsec(d.fecha, d.n); } catch(e) {}
+    return !ya || r.length !== all.length || anul;
   }
   if (d.tipo === 'consec') {
     if (consecEsBorrado(d.fecha, d.n)) return false;
@@ -3950,7 +3953,7 @@ function consecSearchProduct(v) {
   const bl = blParse(v);   // código de bulto escaneado: abre el consecutivo al que pasó
   if (bl) {
     const b = bulGet(bl.id);
-    if (!b || b.estado !== 'cerrado') { preview.innerHTML = '<div class="mod-product-preview" style="background:#2a0f0f;border-color:#f85149"><div style="color:#f85149;font-size:13px;font-weight:700">⚠️ ' + (b ? 'Ese bulto aún está abierto (no pasó a ningún consecutivo)' : 'Bulto no encontrado') + '</div></div>'; preview.style.display = 'block'; qtyRow.style.display = 'none'; consecCurrentProduct = null; return; }
+    if (!b || b.estado !== 'cerrado') { preview.innerHTML = '<div class="mod-product-preview" style="background:#2a0f0f;border-color:#f85149"><div style="color:#f85149;font-size:13px;font-weight:700">⚠️ ' + (b ? (b.estado === 'anulado' ? 'Bulto ANULADO: su consecutivo fue eliminado' : 'Ese bulto aún está abierto (no se ha guardado)') : 'Bulto no encontrado') + '</div></div>'; preview.style.display = 'block'; qtyRow.style.display = 'none'; consecCurrentProduct = null; return; }
     consecSel.fecha = b.fecha; consecSel.n = b.consec; consecSel.user = '*'; consecMulti.on = false;
     const fe = consecFechaEl(); if (fe) fe.value = b.fecha;
     consecClear(); renderConsecList();
@@ -8076,6 +8079,13 @@ function blParse(v) {
   const m = /^B(\d{2})(\d{2})(\d{2})-(\d{2,3})([A-Z0-9]{2})?$/i.exec(String(v || '').trim());
   return m ? { id: m[0].toUpperCase(), fecha: '20' + m[3] + '-' + m[2] + '-' + m[1], num: parseInt(m[4], 10) } : null;
 }
+// Si se elimina un consecutivo, los bultos guardados en él quedan anulados (su etiqueta pasa a ser nula)
+function bulAnularPorConsec(fecha, n) {
+  const all = bulAll(); let ch = false;
+  all.forEach(function(b) { if (b.fecha === fecha && b.consec === n && b.estado === 'cerrado') { b.estado = 'anulado'; ch = true; } });
+  if (ch) bulSet(all);
+  return ch;
+}
 function bulGet(id) { return bulAll().filter(function(b) { return b.id === id; })[0] || null; }
 function bulEnc(cod, desc, user, tipo, extra) { try { window.encolarCambio(cod, desc, '—', '—', user, tipo, extra); } catch(e) { console.error('bulto no encolado', e); } }
 window.bultoAplicarCambio = function(d) {
@@ -8091,7 +8101,7 @@ window.bultoAplicarCambio = function(d) {
     bulSet(all); return true;
   }
   if (d.tipo === 'bulto_item_del') { const n0 = b.items.length; b.items = b.items.filter(function(x) { return x.id !== d.cid; }); if (b.items.length === n0) return false; bulSet(all); return true; }
-  if (d.tipo === 'bulto_cerrar') { if (b.estado === 'cerrado' && b.consec === d.n) return false; b.estado = 'cerrado'; b.consec = d.n; bulSet(all); return true; }
+  if (d.tipo === 'bulto_cerrar') { const nuevo = consecEsBorrado(b.fecha, d.n) ? 'anulado' : 'cerrado'; if (b.estado === nuevo && b.consec === d.n) return false; b.estado = nuevo; b.consec = d.n; bulSet(all); return true; }
   return false;
 };
 function bulRefrescar() {
@@ -8121,7 +8131,7 @@ function bulScan(v) {
   if (!b) { alert('Ese bulto no existe en este equipo todavía. Revisa la conexión o la fecha.'); return; }
   document.getElementById('bl-fecha').value = b.fecha; document.getElementById('bl-scan').value = ''; bulSeleccionar(b.id);
 }
-function bulIcono(b) { return b.estado === 'cerrado' ? '🔒' : '🟢'; }
+function bulIcono(b) { return b.estado === 'cerrado' ? '🔒' : (b.estado === 'anulado' ? '🚫' : '🟢'); }
 function bulRender() {
   const f = document.getElementById('bl-fecha').value || consecHoyKey();
   const lista = bulAll().filter(function(b) { return b.fecha === f; }).sort(function(a, b) { return a.num - b.num || (a.id < b.id ? -1 : 1); });
@@ -8134,9 +8144,11 @@ function bulRender() {
   card.style.display = b ? 'block' : 'none';
   if (b) {
     const cods = {}; b.items.forEach(function(it) { cods[it.cod] = 1; });
-    const uni = b.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0), cerrado = b.estado === 'cerrado';
-    document.getElementById('bl-titulo').textContent = '📦 Bulto ' + b.id;
-    document.getElementById('bl-estado').textContent = (cerrado ? '🔒 Cerrado → ' + consecNombre(b.fecha, b.consec) : '🟢 Abierto') + ' · ' + Object.keys(cods).length + ' artículos · ' + uni + ' unidades';
+    const uni = b.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0), anulado = b.estado === 'anulado', cerrado = b.estado === 'cerrado' || anulado;
+    document.getElementById('bl-titulo').textContent = '📦 Bulto ' + b.id + (anulado ? ' · NULO' : '');
+    document.getElementById('bl-estado').textContent = anulado ? '🚫 Anulado: se eliminó su ' + consecNombre(b.fecha, b.consec) + '. La etiqueta ya no es válida.' : (cerrado ? '🔒 Guardado en ' + consecNombre(b.fecha, b.consec) : '🟢 Abierto') + ' · ' + Object.keys(cods).length + ' artículos · ' + uni + ' unidades';
+    document.getElementById('bl-acciones').style.display = anulado ? 'none' : '';
+    document.getElementById('bl-preview-box').style.display = anulado ? 'none' : 'flex';
     try { document.getElementById('bl-svg-wrap').innerHTML = c128Svg(b.id, { mod: 2, h: 80, id: 'bl-svg' }); } catch(e) { document.getElementById('bl-svg-wrap').textContent = 'No se pudo dibujar el código'; }
     document.getElementById('bl-tam').value = blTam();
     document.getElementById('bl-preview-label').textContent = 'BODEGA DIMERC CONCEPCIÓN\nBULTO ' + b.id;
@@ -8148,6 +8160,7 @@ function bulRender() {
         + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><div class="hist-item-user" style="margin:0">👤 ' + trasEsc(it.user) + ' · 🕐 ' + trasEsc(it.ts) + '</div>'
         + (!cerrado ? '<button onclick="bulQuitar(\'' + it.id + '\')" style="background:none;border:none;color:#f85149;font-size:12px;cursor:pointer;padding:2px 6px">✕ Quitar</button>' : '') + '</div></div>';
     }).join('') : '<div style="font-size:12px;color:#7d8590">Este bulto aún no tiene productos.</div>';
+    if (anulado) document.getElementById('bl-items').innerHTML = '';
   }
   const cer = lista.filter(function(x) { return x.estado === 'cerrado'; });
   document.getElementById('bl-guia-list').innerHTML = cer.length ? cer.map(function(x) {
@@ -8170,7 +8183,7 @@ function bulBuscarProd(v) {
 }
 function bulAddItem() {
   const b = BUL_SEL ? bulGet(BUL_SEL) : null, yo = consecYo();
-  if (!b || b.estado === 'cerrado' || !BUL_PROD) return;
+  if (!b || b.estado !== 'abierto' || !BUL_PROD) return;
   const q = parseInt(document.getElementById('bl-qty').value, 10) || 0; if (q < 1) { alert('La cantidad debe ser al menos 1.'); return; }
   const now = getOfficialNow(), it = { id: 'bi_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), cod: BUL_PROD.cod, desc: BUL_PROD.desc, cantidad: q, ts: now.toLocaleString('es-CL'), _tsRaw: now.toISOString(), user: yo };
   const all = bulAll(), bb = all.filter(function(x) { return x.id === b.id; })[0]; bb.items.push(it); bulSet(all);
@@ -8179,35 +8192,25 @@ function bulAddItem() {
   bulRender(); try { document.getElementById('bl-cod').focus(); } catch(e) {}
 }
 function bulQuitar(cid) {
-  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b || b.estado === 'cerrado') return;
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b || b.estado !== 'abierto') return;
   const all = bulAll(), bb = all.filter(function(x) { return x.id === b.id; })[0]; bb.items = bb.items.filter(function(x) { return x.id !== cid; }); bulSet(all);
   bulEnc('—', 'Quitar de bulto', consecYo(), 'bulto_item_del', { bid: b.id, cid: cid }); bulRender();
 }
 function bulBorrar() {
-  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b || b.estado === 'cerrado') return;
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b || b.estado !== 'abierto') return;
   if (!confirm('¿Eliminar el bulto ' + b.id + ' y sus ' + b.items.length + ' línea(s)?')) return;
   bulSet(bulAll().filter(function(x) { return x.id !== b.id; }));
   bulEnc('—', 'Bulto eliminado', consecYo(), 'bulto_borrar', { bid: b.id }); BUL_SEL = null; bulRender();
 }
-// Cerrar: elegir consecutivo destino; las líneas del bulto pasan al consecutivo (con referencia al bulto)
+// Guardar: cada caja genera su propio consecutivo nuevo con las líneas del bulto (referencia al bulto en cada línea)
 function bulCerrar() {
-  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b || b.estado === 'cerrado') return;
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b || b.estado !== 'abierto') return;
   if (!b.items.length) { alert('El bulto no tiene productos.'); return; }
-  const ns = consecNums(b.fecha);
-  let box = document.getElementById('bul-cerrar-modal'); if (box) box.remove();
-  box = document.createElement('div'); box.id = 'bul-cerrar-modal';
-  box.style.cssText = 'position:fixed;left:0;right:0;top:0;bottom:0;z-index:99998;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:14px';
-  box.innerHTML = '<div style="background:#0d1117;border:2px solid #3fb950;border-radius:14px;padding:16px;max-width:420px;width:100%;max-height:85vh;overflow:auto">'
-    + '<div style="font-size:16px;font-weight:800;color:#3fb950;margin-bottom:6px">🔒 Cerrar bulto ' + b.id + '</div>'
-    + '<div style="font-size:13px;color:#c9d1d9;margin-bottom:10px">Elige el consecutivo al que pasan sus ' + b.items.length + ' línea(s). Después no se podrá modificar el bulto.</div>'
-    + ns.map(function(n) { return '<button type="button" class="jaula-btn" style="margin:0 6px 6px 0" onclick="bulCerrarOk(' + n + ')">' + consecNombre(b.fecha, n) + '</button>'; }).join('')
-    + '<button type="button" class="jaula-btn" style="margin:0 6px 6px 0;border-color:#3fb950;color:#3fb950" onclick="bulCerrarOk(0)">➕ Nuevo consecutivo</button>'
-    + '<div style="margin-top:8px"><button type="button" onclick="document.getElementById(\'bul-cerrar-modal\').remove()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #30363d;background:#161b22;color:#e6edf3;font-size:14px;cursor:pointer">Cancelar</button></div></div>';
-  document.body.appendChild(box);
+  if (!confirm('Guardar el bulto ' + b.id + ': se creará un consecutivo nuevo con sus ' + b.items.length + ' línea(s) y ya no podrá modificarse. ¿Continuar?')) return;
+  bulCerrarOk(0);
 }
 function bulCerrarOk(n) {
-  const b = BUL_SEL ? bulGet(BUL_SEL) : null, yo = consecYo(); if (!b || b.estado === 'cerrado') return;
-  const m0 = document.getElementById('bul-cerrar-modal'); if (m0) m0.remove();
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null, yo = consecYo(); if (!b || b.estado !== 'abierto') return;
   if (!n) {
     const ns = consecNums(b.fecha), mxB = Math.max.apply(null, [0].concat(consecBorr()[b.fecha] || []));
     n = Math.max(ns.length ? ns[ns.length - 1] : 0, mxB, consecMeta()[b.fecha] || 0) + 1;
