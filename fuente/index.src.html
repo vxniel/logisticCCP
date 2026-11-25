@@ -4004,6 +4004,13 @@ function consecBuscarBulto(v, enter) {
   consecBscMsg(b.consec ? '📍 ' + b.id + ' → ' + consecNombre(b.fecha, b.consec) + (porProd > 1 ? ' (producto en ' + porProd + ' bultos; se muestra el más reciente)' : '') : '📍 ' + b.id + ' está abierto y aún sin consecutivo (' + consecFmtFecha(b.fecha) + ').', '#3fb950');
   try { const el = document.getElementById('consec-chips'); if (el) el.scrollIntoView({ block: 'start' }); } catch(e) {}
 }
+function bulVincular(id) {
+  const b = bulGet(id), n = consecSel.n; if (!b || b.estado !== 'abierto' || b.fecha !== consecSel.fecha) return;
+  const ba = bulAll(), bb = ba.filter(function(x) { return x.id === id; })[0]; bb.consec = n; bulSet(ba);
+  bulEnc('—', 'Bulto vinculado', consecYo(), 'bulto_vincular', { bid: id, fecha: b.fecha, n: n });
+  consecCajasExp = {}; consecCajasExp[id] = true; renderConsecList();
+  try { (window.showToast || function() {})('🔗 ' + id + ' → ' + consecNombre(b.fecha, n)); } catch(e) {}
+}
 let consecHistAbierto = false;
 function consecHistToggle() { consecHistAbierto = !consecHistAbierto; renderConsecList(); }
 function consecFilaBulto(b) {
@@ -4014,6 +4021,7 @@ function consecFilaBulto(b) {
     h += '<div style="padding:6px 0 2px;display:flex;flex-direction:column;gap:6px">' + (b.items.length ? b.items.map(function(it) {
       return '<div class="hist-item"><div class="hist-item-name">' + trasEsc(it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + trasEsc(it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + trasEsc(it.cantidad) + '</b></div><div class="hist-item-user" style="margin:4px 0 0">👤 ' + trasEsc(it.user) + ' · 🕐 ' + trasEsc(it.ts) + '</div></div>';
     }).join('') : '<div style="font-size:12px;color:#7d8590">Esta caja aún no tiene productos.</div>')
+      + (completo && b.estado === 'abierto' && !b.consec ? '<button type="button" class="mod-confirm-btn" style="margin:2px 0 0" onclick="bulVincular(\'' + b.id + '\')">🔗 Asignar a ' + trasEsc(consecNombre(consecSel.fecha, consecSel.n)) + '</button>' : '')
       + (completo ? (b.estado === 'anulado' ? '' : '<button type="button" class="mod-back-btn" style="margin:2px 0 0" onclick="bulAbrirDesdeConsec(\'' + b.id + '\')">📦 Abrir ficha / reimprimir etiqueta</button>') + '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (b.estado === 'anulado' ? '' : '<button type="button" class="mod-back-btn" style="margin:0;flex:1" onclick="bulListaEditar(\'' + b.id + '\')">✏️ Editar bulto</button>') + '<button type="button" class="mod-back-btn" style="margin:0;flex:1;border-color:#f85149;color:#f85149" onclick="bulListaEliminar(\'' + b.id + '\')">🗑 Eliminar bulto</button></div>' : '') + '</div>';
   }
   return h + '</div>';
@@ -4287,6 +4295,8 @@ function renderConsecList() {
   const bsF = bulAll().filter(function(b) { return bsFil(b) && b.estado !== 'anulado' && (consecMulti.on ? !!consecMulti.sel[b.consec] : b.consec === consecSel.n); }).sort(bsOrd);
   const bsH = bulAll().filter(function(b) { return bsFil(b) && b.estado === 'anulado'; }).sort(bsOrd);
   if (chips && bsF.length) chips.innerHTML += '<div style="font-size:12px;color:#8b949e;margin:6px 0 0">📦 Bultos ' + (consecMulti.on ? 'de los consecutivos marcados' : 'del ' + trasEsc(consecNombre(consecSel.fecha, consecSel.n))) + '</div>' + bsF.map(consecFilaBulto).join('');
+  const bsU = bulAll().filter(function(b) { return bsFil(b) && b.estado === 'abierto' && !b.consec; }).sort(bsOrd);
+  if (chips && bsU.length && !consecMulti.on) chips.innerHTML += '<div style="font-size:12px;color:#d29922;margin:6px 0 0">🔗 Bultos de la fecha aún sin consecutivo (' + bsU.length + ')</div>' + bsU.map(consecFilaBulto).join('');
   if (chips && !bsF.length && !consecMulti.on) chips.innerHTML += '<div style="font-size:12px;color:#8b949e;margin:6px 0 0">📦 Bultos del ' + trasEsc(consecNombre(consecSel.fecha, consecSel.n)) + ': aún sin bultos (se actualiza solo cuando se asigne uno)</div>';
   if (chips && bsH.length) chips.innerHTML += '<div onclick="consecHistToggle()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;padding:9px 12px;border:1px dashed #30363d;border-radius:10px;font-size:13px;color:#8b949e"><span>🗂 Historial · ' + bsH.length + (bsH.length === 1 ? ' bulto anulado' : ' bultos anulados') + ' (consecutivo eliminado)</span><span style="color:#58a6ff">' + (consecHistAbierto ? '&#9652;' : '&#9662;') + '</span></div>' + (consecHistAbierto ? bsH.map(consecFilaBulto).join('') : '');
   const ah = document.getElementById('consec-acc-title'); if (ah) ah.textContent = '📅 ' + consecFmtFecha(consecSel.fecha) + ' · ' + ns.length + (ns.length === 1 ? ' consecutivo' : ' consecutivos') + (bsF.length ? ' · ' + bsF.length + (bsF.length === 1 ? ' bulto' : ' bultos') : '');
@@ -8340,6 +8350,7 @@ window.bultoAplicarCambio = function(d) {
     bulSet(all); return true;
   }
   if (d.tipo === 'bulto_item_del') { const n0 = b.items.length; b.items = b.items.filter(function(x) { return x.id !== d.cid; }); if (b.items.length === n0) return false; bulSet(all); return true; }
+  if (d.tipo === 'bulto_vincular') { if (b.estado !== 'abierto' || b.consec === d.n) return false; b.consec = d.n; bulSet(all); return true; }
   if (d.tipo === 'bulto_abrir') { if (b.estado === 'abierto' || b.estado === 'anulado') return false; b.estado = 'abierto'; if (d.n) b.consec = d.n; bulSet(all); return true; }
   if (d.tipo === 'bulto_cerrar') { const nuevo = consecEsBorrado(b.fecha, d.n) ? 'anulado' : 'cerrado'; if (b.estado === nuevo && b.consec === d.n) return false; b.estado = nuevo; b.consec = d.n; bulSet(all); return true; }
   return false;
@@ -8359,6 +8370,7 @@ function bulAvisoMov(d) {
     else if (d.tipo === 'bulto_item') t = '➕ ' + id + ': ' + (d.cantidad || 1) + ' × ' + d.cod + u;
     else if (d.tipo === 'bulto_item_del') t = '➖ ' + id + ': producto quitado' + u;
     else if (d.tipo === 'bulto_cerrar') t = '🔒 ' + id + ' cerrado' + (d.n && f ? ' → ' + cn(f, d.n) : '') + u;
+    else if (d.tipo === 'bulto_vincular') t = '🔗 ' + id + ' → ' + cn(f, d.n) + u;
     else if (d.tipo === 'bulto_abrir') t = '✏️ ' + id + ' reabierto para editar' + u;
     else if (d.tipo === 'bulto_borrar') t = '🗑 Bulto ' + id + ' eliminado' + u;
     if (t) (window.showToast || function() {})(t);
