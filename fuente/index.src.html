@@ -3742,6 +3742,61 @@ function consecNuevo() {
   try { window.encolarCambio('—', 'Nuevo consecutivo', '—', '—', consecYo(), 'consec_nuevo', { fecha: consecSel.fecha, n: sig }); } catch(e) {}
   consecSel.n = sig; renderConsecList();
 }
+
+// ===== Alerta: códigos del listado de traslado de Pablo (solo se muestra con la sesión de VXNIEL) =====
+const TRAS_PABLO = {};
+([["560858","REPELENTE INSECTOS AEROS DEET 15% 165CC",48,0],["554923","TOALLITAS DESINFECTANTES FRASCO 35 UN",41,0],["441233","CARPETA C/FUELLE OF 12DIV PP C/ELAST NEG",57,0],["125275","LAPICES 12 COLORES TRIANGULAR +3 GRAF FC",48,0],["425943","ELASTICO BILLETE COLORES 16X90MM 1/2 KIL",66,0],["102026","LAPIZ TINTA GEL 0.7MM G-2 RETRACTIL NEGR",38,0],["569372","SERVILLETA MESA PREM DOB 40X40 NEG 50 UN",50,0],["352507","MARCADOR PIZARRA RECARG. P/RED 500 AZUL",24,0],["100137","ARCHIVADOR CATALOGO OF. 2.AD 2BCO CLAS.D",72,0],["441490","CLORO 2 LT CLORINDA",40,0],["558536","CINTA ADHESIVA MASKING 24MMX18M AMARILLA",48,0],["569451","TRAPERO ALGODON CON OJAL 50X50",56,0],["104131","CARPETA C/FUNDAS A4 40UNI NEGRA",71,0],["377349","CUAD UNIV LISO COMPOSICION 100 HJS",44,0],["498781","CUADERNO COLLEGE LISO 7MM 100 HJS COLON",69,0],["393274","LIMP PISO C/DESINF CITRICO FRUTAL 900CC",46,0],["378348","ADH 100 CC SILICONA TORRE",38,0],["105373","MAQUINA DE AFEITAR PREST. 1 UND GILLETTE",58,0],["550008","CINTA ADH MASKING CREMA 36MMX40MT",38,0],["424464","SOBRE SACO REVISTA BLANCO 90GR 25UN FULT",42,0],["539444","TESAFLEX CINTA AISLAD ELECT PROF NEGRA 2",40,0],["524034","ARROZ GRADO 1 1KG COLISEO",40,0],["588042","BOLSA DE BASURA ROLLO 80X110 CM 10 UN",40,0],["102583","MARCADOR PERM RECAR PTA RED ROJO SCA",38,0],["102555","MARCADOR PERM. RECARG. 700 P/FINA NEGRO",36,0],["498060","CARTON PIEDRA GRIS 1,5MM 55X77CM TORRE",39,0],["563402","CAJA DE ARCHIVO MEDIANA RHEIN",52,0],["553302","PLASTICINA TRIANGULAR 12COL 200GRS RHEIN",55,0],["552184","EST. LAPICES COLORES 12COL+2GRAF. RHEIN",52,0],["426987","BANDERITAS ADH.TAPE FLAGS SET DE 5 FLECH",61,0],["507449","ANOTADOR SIMPLE PVC OFICIO AZUL LAVORO",42,0],["553054","CUAD COLLEGE ONE COLOR CALIG HORIZ 100H",57,0],["423657","LAPIZ PASTA BORRABLE 0.7MM AZUL",58,0],["428204","BANDERITAS ADH.PAPEL PQT 5X100 NEON SURT",57,0],["560525","CARTULINA ESPANOLA BLANCA 50X70CM",50,0],["553053","CUADERNO COLLEGE ONE COLOR CROQUIS 100H",41,0],["192380","CARPETA VINIL PIGMENTADA CARTA (FAST) AZ",20,0],["505141","CINTA EMBALAJE PROFESIONALTR 200M X 48MM",108,104],["355203","CARPETA VINIL A4 C/BOLS TAPA TRANSP AZUL",26,0],["438452","LAPIZ PASTA BP1 1.0 NEGRO PILOT",49,0],["415676","DOBLE CLIP 19MM 12UNI NEGRO TORRE",38,0],["519466","MARCADOR DE PIZARRA PTA RED. CELESTE",54,0],["123933","SALSA DE TOMATE NATURAL 200 GRS POMAROLA",82,51],["197211","PANO PISO OSNABURGO 50X70 1 UN",97,92],["434537","MARCADOR PERM. P/CD NEGRO P/FINA DIMERC",52,0],["463561","CARPETA C/ACCOCLIP OF. VINIL TRANSP NEGR",40,0],["100640","CARPETA C/ACCOCLIP CTA. VINIL NEGRO",51,0],["517128","CARPETA C/PAPEL CARTULINA",81,70],["380212","CARPETA C/ELASTICO PP OF ROJA",75,62],["105992","MEZCLADOR PLASTICO 6 DIVISIONES",68,0],["543102","BANDEJA RECT GRANDE BLANCO X3 UNI COTILL",97,93],["523844","PORTACREDENCIAL RETRACTIL YOYO AZUL",85,51],["553519","CARPETA PLASTICA OFI DATAFILE AMAR RHEIN",86,80],["105680","GOMA DE BORRAR MIGA MEDIANA",56,0],["100641","CARPETA VINIL OF NEGRA",89,74],["108124","LAPIZ GRAFITO 2HB TRIANGULAR 1205",287,276],["558575","SEPARADOR OFICIO INDICE AZ CARTULINA BCO",122,120],["103237","TIJERA ESCOLAR 5 1/4IN PLAST/METAL NEGRO",205,200],["531831","PORTAMINAS 0,5MM CUERPO ENGOMADO GEOM",144,140],["558898","CARPETA C/ELASTICO CARTUL OF AMARI RHEIN",89,87],["553445","LAPIZ BICOLOR JUMBO RHEIN",169,163],["287542","ADHESIVO SILICONA LIQUIDA 30 CC",114,107],["553714","SACAPUNTA PLASTICO SIMPLE SOFTGRIP RHEIN",413,412]]).forEach(function(f) { TRAS_PABLO[f[0]] = { desc: f[1], tras: f[2], codif: f[3] }; });
+const TRAS_VISTOS_KEY = 'dimerc_traslado_vistos';
+let trasListo = false, trasCola = [];
+function trasVistos() { try { return JSON.parse(localStorage.getItem(TRAS_VISTOS_KEY) || '{}'); } catch(e) { return {}; } }
+function trasMarcar(ids) { const v = trasVistos(); ids.forEach(function(i) { v[i] = 1; }); try { localStorage.setItem(TRAS_VISTOS_KEY, JSON.stringify(v)); } catch(e) {} }
+function trasEsVxniel() { return consecYo() === 'VXNIEL'; }
+function trasEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function trasAviso(items) {
+  if (!trasEsVxniel() || !items.length) return;
+  trasMarcar(items.map(function(it) { return it.id; }));
+  trasCola = trasCola.concat(items);
+  let box = document.getElementById('tras-alerta');
+  if (!box) {
+    box = document.createElement('div'); box.id = 'tras-alerta';
+    box.style.cssText = 'position:fixed;left:0;right:0;top:0;bottom:0;z-index:99999;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:14px';
+    document.body.appendChild(box);
+  }
+  const filas = trasCola.map(function(it) {
+    const t = TRAS_PABLO[it.cod] || {};
+    return '<div style="background:#161b22;border:1px solid #f0883e;border-radius:10px;padding:10px;margin-bottom:8px">'
+      + '<div style="font-weight:700;color:#e6edf3;font-size:14px">' + trasEsc(it.desc || t.desc) + '</div>'
+      + '<div style="font-size:12px;color:#8b949e;margin-top:3px">Código: <b style="color:#58a6ff">' + trasEsc(it.cod) + '</b> · Cantidad en consecutivo: <b style="color:#3fb950">' + trasEsc(it.cantidad) + '</b></div>'
+      + '<div style="font-size:12px;color:#f0883e;margin-top:3px">Pablo pide trasladar: <b>' + trasEsc(t.tras) + '</b>' + (t.codif ? ' · a codificar: <b>' + trasEsc(t.codif) + '</b>' : '') + '</div>'
+      + '<div style="font-size:11px;color:#8b949e;margin-top:3px">' + trasEsc(consecNombre(it.fecha, it.n)) + ' · 👤 ' + trasEsc(it.user) + '</div></div>';
+  }).join('');
+  box.innerHTML = '<div style="background:#0d1117;border:2px solid #f0883e;border-radius:14px;padding:16px;max-width:460px;width:100%;max-height:85vh;overflow:auto">'
+    + '<div style="font-size:16px;font-weight:800;color:#f0883e;margin-bottom:4px">⚠️ Producto del listado de Pablo</div>'
+    + '<div style="font-size:12px;color:#8b949e;margin-bottom:10px">' + trasCola.length + ' coincidencia(s) en lo que se está preparando</div>'
+    + filas + '<button type="button" onclick="trasCerrar()" style="width:100%;padding:12px;border-radius:10px;border:none;background:#f0883e;color:#0d1117;font-size:15px;font-weight:800;cursor:pointer">Entendido</button></div>';
+  try { if (navigator.vibrate) navigator.vibrate([250, 120, 250]); } catch(e) {}
+  try { const AC = window.AudioContext || window.webkitAudioContext; if (AC) { const c = new AC(), o = c.createOscillator(); o.frequency.value = 880; o.connect(c.destination); o.start(); setTimeout(function() { try { o.stop(); c.close(); } catch(e) {} }, 350); } } catch(e) {}
+}
+function trasCerrar() { const b = document.getElementById('tras-alerta'); if (b) b.remove(); trasCola = []; }
+// Ítem nuevo (agregado aquí o recibido de otro equipo). Antes de "trasListo" lo cubre el resumen inicial.
+function trasRevisarItem(it, esLocal) {
+  try { if (!it || !TRAS_PABLO[it.cod] || !trasEsVxniel()) return; if (!esLocal && !trasListo) return; if (trasVistos()[it.id]) return; trasAviso([it]); } catch(e) {}
+}
+(function trasIniciar() {
+  let tries = 0;
+  const t = setInterval(function() {
+    try {
+      if (++tries > 900) { clearInterval(t); return; }
+      if (!window._loggedUser || !trasEsVxniel()) return;
+      clearInterval(t);
+      setTimeout(function() {
+        trasListo = true;
+        const vistos = trasVistos(), pend = consecAll().filter(function(it) { return TRAS_PABLO[it.cod] && !vistos[it.id]; });
+        if (pend.length) trasAviso(pend);
+      }, 9000);
+    } catch(e) {}
+  }, 1000);
+})();
 let consecPlegado = false;
 function consecAplicarPlegado() {
   const l = document.getElementById('consec-items-list'), c = document.getElementById('consec-chev');
@@ -3773,7 +3828,7 @@ window.consecAplicarCambio = function(d) {
     const all = consecAll();
     if (all.some(function(x) { return x.id === d.cid; })) return false;
     all.push({ id: d.cid, cod: d.cod, desc: d.desc, ubic: d.ubicP || d.a || '—', cantidad: d.cantidad, ts: new Date(d.ts).toLocaleString('es-CL'), _tsRaw: d.ts, fecha: d.fecha, n: d.n, user: d.user });
-    consecSetAll(all); return true;
+    consecSetAll(all); try { trasRevisarItem(all[all.length - 1], false); } catch(e) {} return true;
   }
   if (d.tipo === 'consec_nuevo') {
     const m = consecMeta(); if ((m[d.fecha] || 0) >= d.n) return false;
@@ -3851,6 +3906,7 @@ function consecAddItem() {
   const all = consecAll(); all.push(item); consecSetAll(all);
   const m = consecMeta(); if ((m[consecSel.fecha] || 0) < consecSel.n) { m[consecSel.fecha] = consecSel.n; consecMetaSet(m); }
   consecEncolar('consec', item);
+  trasRevisarItem(item, true);
   consecClear();
   renderConsecList();
   consecCodEl.focus();
