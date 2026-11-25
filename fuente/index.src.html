@@ -3016,6 +3016,7 @@ function nuevoProductoSave() {
       </div>
       <div id="consec-multi-bar" style="display:none;margin-top:10px;padding:10px;border:1px solid #1f6feb;border-radius:10px;background:#0d2136">
         <div id="consec-multi-info" style="font-size:12px;color:#58a6ff;margin-bottom:8px">Toca los consecutivos que quieres incluir</div>
+        <div style="font-size:11px;color:#8b949e;margin-bottom:8px">Los botones de Excel, PDF y Registro picking usan solo los marcados.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="mod-back-btn" style="margin:0" onclick="consecMultiTodos()">Todos</button>
           <button class="mod-back-btn" style="margin:0;border-color:#58a6ff;color:#58a6ff" onclick="exportConsecGuiaSel()">📋 Registro picking de los seleccionados</button>
@@ -3066,8 +3067,8 @@ function nuevoProductoSave() {
       </div>
 
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        <button class="mod-back-btn" onclick="exportConsecExcel()">📊 Exportar Excel (fecha y usuario)</button>
-        <button class="mod-back-btn" onclick="exportConsecPDF()">📄 Exportar PDF (fecha y usuario)</button>
+        <button class="mod-back-btn" onclick="exportConsecExcel()">📊 Exportar Excel (consecutivo seleccionado)</button>
+        <button class="mod-back-btn" onclick="exportConsecPDF()">📄 Exportar PDF (consecutivo seleccionado)</button>
         <button class="mod-back-btn" onclick="exportConsecGuia()" style="border-color:#58a6ff;color:#58a6ff">📋 Registro picking (consecutivo seleccionado)</button>
         <button class="mod-back-btn" onclick="consecClearList()">🗑 Limpiar este consecutivo</button>
       </div>
@@ -4044,8 +4045,14 @@ function renderConsecList() {
 }
 
 // Grupos de la fecha seleccionada, uno por consecutivo (con filtro opcional de usuario)
+// Qué consecutivos se exportan: los marcados (modo "Seleccionar cons.") o, si no, solo el que se está viendo
+function consecExportNs() {
+  if (consecMulti.on) { const ns = consecNums(consecSel.fecha).filter(function(n) { return consecMulti.sel[n]; }); if (ns.length) return ns; }
+  return [consecSel.n];
+}
 function getConsecGrupos() {
-  const all = consecAll().filter(function(it) { return it.fecha === consecSel.fecha && (consecSel.user === '*' || it.user === consecSel.user); });
+  const ens = consecExportNs();
+  const all = consecAll().filter(function(it) { return it.fecha === consecSel.fecha && ens.indexOf(it.n) >= 0 && (consecSel.user === '*' || it.user === consecSel.user); });
   const nums = {}; all.forEach(function(it) { nums[it.n] = 1; });
   return Object.keys(nums).map(Number).sort(function(a, b) { return a - b; }).map(function(n) {
     return { n: n, nombre: consecNombre(consecSel.fecha, n), rows: all.filter(function(it) { return it.n === n; }).map(function(it) {
@@ -4055,7 +4062,7 @@ function getConsecGrupos() {
 }
 function consecArchivo(ext) {
   const [y, m, d] = consecSel.fecha.split('-');
-  return `Consecutivo(${d}-${m}-${y}${consecSel.user === '*' ? '' : '_' + consecSel.user})${ext}`;
+  return `Consecutivo(${d}-${m}-${y})_(${consecExportNs().join('+')})${consecSel.user === '*' ? '' : '_' + consecSel.user}${ext}`;
 }
 
 function exportConsecExcel() {
@@ -4063,10 +4070,11 @@ function exportConsecExcel() {
   if(!grupos.length) { alert('No hay consecutivos para esa fecha y usuario.'); return; }
   const wb = XLSX.utils.book_new(), usados = {};
   grupos.forEach(function(g) {
-    const rows = g.rows.map(function(r) { return Object.assign({ Consecutivo: g.nombre }, r); });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{wch:34},{wch:12},{wch:45},{wch:10},{wch:20},{wch:14}];
-    XLSX.utils.sheet_add_aoa(ws, [['By: Vxniel']], { origin: 'A' + (rows.length + 3) });
+    const rows = g.rows;
+    const ws = XLSX.utils.aoa_to_sheet([[g.nombre + '  ·  ' + rows.length + (rows.length === 1 ? ' producto' : ' productos') + ' · ' + rows.reduce(function(a, r) { return a + (parseInt(r.Cantidad, 10) || 0); }, 0) + ' uni.'], []]);
+    XLSX.utils.sheet_add_json(ws, rows, { origin: 'A3' });
+    ws['!cols'] = [{wch:12},{wch:50},{wch:10},{wch:22},{wch:14}];
+    XLSX.utils.sheet_add_aoa(ws, [['By: Vxniel']], { origin: 'A' + (rows.length + 5) });
     let nom = ('Consec (' + g.n + ')').replace(/[\\/?*\[\]:]/g, '').slice(0, 31); while (usados[nom]) nom = nom.slice(0, 29) + '_' + Math.floor(Math.random() * 9);
     usados[nom] = 1; XLSX.utils.book_append_sheet(wb, ws, nom);
   });
