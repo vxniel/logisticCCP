@@ -3582,8 +3582,12 @@ function nuevoProductoSave() {
         <div class="mod-step-desc" style="margin:10px 0 6px">👤 Filtrar por usuario</div>
         <select id="bl-user-sel" onchange="BUL_USER=this.value;bulRender()" style="width:100%;height:50px;line-height:normal;padding:0 12px;box-sizing:border-box;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:16px"></select>
         <div id="bl-sync" style="font-size:12px;color:#8b949e;margin:8px 0 0"></div>
-        <div class="mod-step-desc" style="margin:10px 0 6px">Bultos de la fecha (toca uno)</div>
-        <div id="bl-chips" style="display:flex;flex-wrap:wrap"></div>
+        <div class="mod-step-desc" style="margin:10px 0 6px">Bultos de la fecha (toca uno) <span id="bl-cuenta" style="color:#58a6ff"></span></div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div class="sbox" style="flex:1.4;margin:0"><span class="sico">🔍</span><input id="bl-filtro" type="text" placeholder="Filtrar: código de bulto o producto" autocomplete="off" oninput="BUL_FILTRO=this.value;bulRender()"/></div>
+          <select id="bl-estado-sel" onchange="BUL_ESTADO=this.value;bulRender()" style="flex:1;min-width:0;height:50px;padding:0 8px;box-sizing:border-box;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:14px"><option value="*">Todos</option><option value="abierto">🟢 Abiertos</option><option value="cerrado">🔒 Cerrados</option><option value="anulado">🚫 Nulos</option></select>
+        </div>
+        <div id="bl-chips" style="display:flex;flex-wrap:wrap;max-height:220px;overflow-y:auto"></div>
         <div class="mod-step-desc" style="margin:6px 0">🔎 …o escanea el código de la caja</div>
         <div class="sbox"><span class="sico">📦</span><input id="bl-scan" type="text" placeholder="Código de bulto" autocomplete="off" oninput="bulScan(this.value)"/></div>
       </div>
@@ -8148,7 +8152,12 @@ function bcImprimir() {
 
 // ===== Bultos (cajas Dimerc): código de barra → asignar productos → cerrar y pasar a consecutivo → guía de despacho =====
 // Se sincronizan por el registro de cambios (tipos bulto_nuevo, bulto_item, bulto_item_del, bulto_cerrar, bulto_borrar).
-let BUL_SEL = null, BUL_PROD = null, BUL_GUIA = {}, BUL_USER = '*';
+let BUL_SEL = null, BUL_PROD = null, BUL_GUIA = {}, BUL_USER = '*', BUL_FILTRO = '', BUL_ESTADO = '*';
+function bulCoincide(b) {
+  if (BUL_ESTADO !== '*' && b.estado !== BUL_ESTADO) return false;
+  const q = String(BUL_FILTRO || '').trim().toUpperCase(); if (!q) return true;
+  return b.id.indexOf(q) >= 0 || b.items.some(function(it) { return String(it.cod).toUpperCase().indexOf(q) >= 0 || String(it.desc || '').toUpperCase().indexOf(q) >= 0; });
+}
 // Estado de conexión de consecutivos y bultos: se refresca solo cada pocos segundos
 function sincEstadoTexto(okMsg) {
   let pend = 0; try { pend = JSON.parse(localStorage.getItem('dimerc_cambios_pend') || '[]').filter(function(x) { return /^(bulto|consec)/.test(String(x.tipo)); }).length; } catch(e) {}
@@ -8336,9 +8345,11 @@ function bulRender() {
   const lista = delDia.filter(bulDeUsuario).sort(function(a, b) { return a.num - b.num || (a.id < b.id ? -1 : 1); });
   if (BUL_SEL && !lista.some(function(b) { return b.id === BUL_SEL; })) BUL_SEL = null;
   if (!BUL_SEL && lista.length) BUL_SEL = lista[lista.length - 1].id;
-  document.getElementById('bl-chips').innerHTML = lista.length ? lista.map(function(b) {
+  const vis = lista.filter(bulCoincide), cu = document.getElementById('bl-cuenta');
+  if (cu) cu.textContent = '· ' + (vis.length === lista.length ? lista.length : vis.length + ' de ' + lista.length);
+  document.getElementById('bl-chips').innerHTML = vis.length ? vis.map(function(b) {
     return '<button type="button" class="jaula-btn ' + (BUL_SEL === b.id ? 'active' : '') + '" style="margin:0 6px 6px 0" onclick="bulSeleccionar(\'' + b.id + '\')">' + bulIcono(b) + ' ' + b.id + '</button>';
-  }).join('') : '<div style="font-size:12px;color:#7d8590">No hay bultos en esa fecha. Crea uno con "➕ Nuevo bulto".</div>';
+  }).join('') : '<div style="font-size:12px;color:#7d8590">' + (lista.length ? 'Ningún bulto coincide con el filtro.' : 'No hay bultos en esa fecha. Crea uno con "➕ Nuevo bulto".') + '</div>';
   const b = BUL_SEL ? bulGet(BUL_SEL) : null, card = document.getElementById('bl-det-card');
   card.style.display = b ? 'block' : 'none';
   if (b) {
