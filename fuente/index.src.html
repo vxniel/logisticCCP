@@ -3046,9 +3046,12 @@ function nuevoProductoSave() {
 
     <!-- Lista actual -->
     <div class="mod-card" id="consec-list-card" style="display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div onclick="consecTogglePlegar()" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;cursor:pointer;gap:8px">
         <div class="mod-step-label">📦 Consecutivo actual</div>
-        <div id="consec-count" style="background:#0d2136;border:1px solid #1d3d5c;border-radius:20px;padding:3px 10px;font-size:12px;color:#58a6ff;font-weight:700"></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div id="consec-count" style="background:#0d2136;border:1px solid #1d3d5c;border-radius:20px;padding:3px 10px;font-size:12px;color:#58a6ff;font-weight:700"></div>
+          <button type="button" id="consec-chev" aria-label="Mostrar u ocultar la lista" style="background:#0d1117;border:1px solid #30363d;border-radius:8px;width:34px;height:30px;color:#e6edf3;font-size:15px;cursor:pointer;line-height:1;padding:0">&#9652;</button>
+        </div>
       </div>
       <div id="consec-items-list" style="display:flex;flex-direction:column;gap:7px"></div>
 
@@ -3739,6 +3742,13 @@ function consecNuevo() {
   try { window.encolarCambio('—', 'Nuevo consecutivo', '—', '—', consecYo(), 'consec_nuevo', { fecha: consecSel.fecha, n: sig }); } catch(e) {}
   consecSel.n = sig; renderConsecList();
 }
+let consecPlegado = false;
+function consecAplicarPlegado() {
+  const l = document.getElementById('consec-items-list'), c = document.getElementById('consec-chev');
+  if (l) l.style.display = consecPlegado ? 'none' : 'flex';
+  if (c) c.innerHTML = consecPlegado ? '&#9662;' : '&#9652;';
+}
+function consecTogglePlegar() { consecPlegado = !consecPlegado; consecAplicarPlegado(); }
 let consecMulti = { on: false, sel: {} };
 function consecElegir(n) { if (consecMulti.on) { consecMulti.sel[n] = !consecMulti.sel[n]; } else { consecSel.n = n; } renderConsecList(); }
 function consecToggleMulti() { consecMulti.on = !consecMulti.on; consecMulti.sel = {}; if (consecMulti.on) consecMulti.sel[consecSel.n] = true; renderConsecList(); }
@@ -3909,6 +3919,7 @@ function renderConsecList() {
   }
   listCard.style.display = 'block';
   emptyCard.style.display = 'none';
+  consecAplicarPlegado();
   const total = list.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0);
   count.textContent = list.length + (list.length===1 ? ' producto' : ' productos') + ' · ' + total + ' uni.';
   itemsList.innerHTML = list.map((it, i) => `
