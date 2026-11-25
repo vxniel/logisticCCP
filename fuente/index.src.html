@@ -4084,7 +4084,9 @@ window.consecAplicarCambio = function(d) {
     const all = consecAll(), r = all.filter(function(x) { return !(x.fecha === d.fecha && x.n === d.n); });
     if (r.length !== all.length) consecSetAll(r);
     let anul = false; try { anul = bulAnularPorConsec(d.fecha, d.n); } catch(e) {}
-    return !ya || r.length !== all.length || anul;
+    const res = !ya || r.length !== all.length || anul;
+    try { if (res && d.user !== consecYo() && d.ts && Date.now() - new Date(d.ts).getTime() < 120000) (window.showToast || function() {})('🚫 ' + consecNombre(d.fecha, d.n) + ' eliminado' + (anul ? ': sus bultos pasaron al historial' : '') + (d.user ? ' · ' + d.user : '')); } catch(e) {}
+    return res;
   }
   if (d.tipo === 'consec') {
     if (consecEsBorrado(d.fecha, d.n)) return false;
@@ -4106,7 +4108,7 @@ window.consecAplicarCambio = function(d) {
 };
 function consecRefrescar() {
   clearTimeout(window._consecT);
-  window._consecT = setTimeout(function() { try { const s = document.getElementById('section-consec'); if (s && s.style.display !== 'none') renderConsecList(); } catch(e) {} }, 200);
+  window._consecT = setTimeout(sincPestanas, 200);
 }
 
 const consecCodEl = document.getElementById('consec-cod');
@@ -4285,6 +4287,7 @@ function renderConsecList() {
   const bsF = bulAll().filter(function(b) { return bsFil(b) && b.estado !== 'anulado' && (consecMulti.on ? !!consecMulti.sel[b.consec] : b.consec === consecSel.n); }).sort(bsOrd);
   const bsH = bulAll().filter(function(b) { return bsFil(b) && b.estado === 'anulado'; }).sort(bsOrd);
   if (chips && bsF.length) chips.innerHTML += '<div style="font-size:12px;color:#8b949e;margin:6px 0 0">📦 Bultos ' + (consecMulti.on ? 'de los consecutivos marcados' : 'del ' + trasEsc(consecNombre(consecSel.fecha, consecSel.n))) + '</div>' + bsF.map(consecFilaBulto).join('');
+  if (chips && !bsF.length && !consecMulti.on) chips.innerHTML += '<div style="font-size:12px;color:#8b949e;margin:6px 0 0">📦 Bultos del ' + trasEsc(consecNombre(consecSel.fecha, consecSel.n)) + ': aún sin bultos (se actualiza solo cuando se asigne uno)</div>';
   if (chips && bsH.length) chips.innerHTML += '<div onclick="consecHistToggle()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;padding:9px 12px;border:1px dashed #30363d;border-radius:10px;font-size:13px;color:#8b949e"><span>🗂 Historial · ' + bsH.length + (bsH.length === 1 ? ' bulto anulado' : ' bultos anulados') + ' (consecutivo eliminado)</span><span style="color:#58a6ff">' + (consecHistAbierto ? '&#9652;' : '&#9662;') + '</span></div>' + (consecHistAbierto ? bsH.map(consecFilaBulto).join('') : '');
   const ah = document.getElementById('consec-acc-title'); if (ah) ah.textContent = '📅 ' + consecFmtFecha(consecSel.fecha) + ' · ' + ns.length + (ns.length === 1 ? ' consecutivo' : ' consecutivos') + (bsF.length ? ' · ' + bsF.length + (bsF.length === 1 ? ' bulto' : ' bultos') : '');
   consecAccAplicar();
@@ -8343,8 +8346,29 @@ window.bultoAplicarCambio = function(d) {
 };
 function bulRefrescar() {
   clearTimeout(window._bulT);
-  window._bulT = setTimeout(function() { try { const p = document.getElementById('bc-panel-bulto'); if (p && p.style.display !== 'none') bulRender(); const q = document.getElementById('bc-panel-verif'); if (q && q.style.display !== 'none') verRender(); } catch(e) {} }, 200);
+  window._bulT = setTimeout(sincPestanas, 200);
 }
+// Aviso en pantalla cuando otro equipo/usuario mueve bultos (nuevo, producto, cierre, reapertura, eliminación, consecutivo eliminado)
+function bulAvisoMov(d) {
+  try {
+    if (!d || d.user === consecYo()) return;
+    const ts = new Date(d.ts).getTime(); if (!ts || Date.now() - ts > 120000) return;
+    const id = d.bid || '', u = d.user ? ' · ' + d.user : '', cn = function(f, n) { return consecNombre(f, n); }, bb = bulGet(id), f = d.fecha || (bb && bb.fecha);
+    let t = '';
+    if (d.tipo === 'bulto_nuevo') t = '🟢 Nuevo bulto ' + id + (d.consec ? ' → ' + cn(f, d.consec) : '') + u;
+    else if (d.tipo === 'bulto_item') t = '➕ ' + id + ': ' + (d.cantidad || 1) + ' × ' + d.cod + u;
+    else if (d.tipo === 'bulto_item_del') t = '➖ ' + id + ': producto quitado' + u;
+    else if (d.tipo === 'bulto_cerrar') t = '🔒 ' + id + ' cerrado' + (d.n && f ? ' → ' + cn(f, d.n) : '') + u;
+    else if (d.tipo === 'bulto_abrir') t = '✏️ ' + id + ' reabierto para editar' + u;
+    else if (d.tipo === 'bulto_borrar') t = '🗑 Bulto ' + id + ' eliminado' + u;
+    if (t) (window.showToast || function() {})(t);
+  } catch(e) {}
+}
+(function() {
+  const orig = window.bultoAplicarCambio;
+  window.bultoAplicarCambio = function(d) { const r = orig(d); if (r) bulAvisoMov(d); return r; };
+  window.addEventListener('storage', function(e) { if (/^dimerc_(bultos|consec)/.test(e.key || '')) sincPestanasProg(); });   // otra pestaña del navegador
+})();
 function bcPanel(cual) {
   const b = cual === 'bulto', v = cual === 'verif';
   document.getElementById('bc-panel-barra').style.display = (b || v) ? 'none' : '';
