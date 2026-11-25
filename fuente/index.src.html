@@ -3920,6 +3920,12 @@ function trasRevisarItem(it, esLocal) {
 // Detalle por caja (bulto) del consecutivo visto: encabezado con flecha; cada caja se despliega con sus productos
 let consecCajasAbierto = true, consecCajasExp = {};
 function consecCajasToggle() { consecCajasAbierto = !consecCajasAbierto; consecRenderCajas(); }
+// Toca un bulto en el desglose de la fecha: abre su consecutivo con la caja desplegada (o su ficha si aún no tiene consecutivo)
+function consecVerBulto(id) {
+  const b = bulGet(id); if (!b) return;
+  if (b.consec && !consecMulti.on) { consecSel.n = b.consec; consecCajasAbierto = true; consecCajasExp = {}; consecCajasExp[id] = true; renderConsecList(); try { document.getElementById('consec-cajas-card').scrollIntoView({ block: 'center' }); } catch(e) {} return; }
+  if (USUARIOS_COMPLETOS.indexOf(consecYo()) >= 0) bulAbrirDesdeConsec(id); else alert('Este bulto aún está abierto y sin consecutivo.');
+}
 function consecCajaToggle(id) { consecCajasExp[id] = !consecCajasExp[id]; consecRenderCajas(); }
 function consecRenderCajas() {
   const card = document.getElementById('consec-cajas-card'); if (!card) return;
@@ -4180,7 +4186,14 @@ function renderConsecList() {
     const uni = its.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0);
     return '<button type="button" class="jaula-btn ' + (act ? 'active' : '') + '" style="margin:0;width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px" onclick="consecElegir(' + n + ')"><span>' + (consecMulti.on ? (act ? '☑ ' : '☐ ') : '') + consecNombre(consecSel.fecha, n) + '</span><span style="font-size:11px;font-weight:600;opacity:.8">' + its.length + ' prod. · ' + uni + ' uni.</span></button>';
   }).join('');
-  const ah = document.getElementById('consec-acc-title'); if (ah) ah.textContent = '📅 ' + consecFmtFecha(consecSel.fecha) + ' · ' + ns.length + (ns.length === 1 ? ' consecutivo' : ' consecutivos');
+  // Bultos (cajas con código de barra) hechos en esa fecha: se listan debajo de los consecutivos
+  const bsF = bulAll().filter(function(b) { return b.fecha === consecSel.fecha && (consecSel.user === '*' || b.user === consecSel.user || b.items.some(function(it) { return it.user === consecSel.user; })); }).sort(function(a, b) { return a.num - b.num || (a.id < b.id ? -1 : 1); });
+  if (chips && bsF.length) chips.innerHTML += '<div style="font-size:12px;color:#8b949e;margin:6px 0 0">📦 Bultos de la fecha</div>' + bsF.map(function(b) {
+    const cods = {}; b.items.forEach(function(it) { cods[it.cod] = 1; });
+    const uni = b.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0);
+    return '<button type="button" class="jaula-btn" style="margin:0;width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px" onclick="consecVerBulto(\'' + b.id + '\')"><span>' + bulIcono(b) + ' Bulto ' + trasEsc(b.id) + '</span><span style="font-size:11px;font-weight:600;opacity:.8">' + Object.keys(cods).length + ' prod. · ' + uni + ' uni.</span></button>';
+  }).join('');
+  const ah = document.getElementById('consec-acc-title'); if (ah) ah.textContent = '📅 ' + consecFmtFecha(consecSel.fecha) + ' · ' + ns.length + (ns.length === 1 ? ' consecutivo' : ' consecutivos') + (bsF.length ? ' · ' + bsF.length + (bsF.length === 1 ? ' bulto' : ' bultos') : '');
   consecAccAplicar();
   const mb = document.getElementById('consec-multi-bar'); if (mb) mb.style.display = consecMulti.on ? 'block' : 'none';
   const sb = document.getElementById('consec-selmode-btn'); if (sb) sb.textContent = consecMulti.on ? '✖ Salir de selección' : '☑️ Seleccionar cons.';
