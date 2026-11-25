@@ -4222,6 +4222,7 @@ function consecQuitarPorId(id) {
 function consecRemoveItem(idx) {
   const act = getConsecList(), objetivo = act[idx]; if (!objetivo) return;
   if (objetivo.user !== consecYo() && !USUARIOS_COMPLETOS.includes(consecYo())) { alert('Solo puedes quitar los productos que agregaste tú.'); return; }
+  if (!confirm('¿Seguro que quieres quitar este producto del consecutivo?\n\n' + (objetivo.desc || objetivo.cod) + '\nCódigo ' + objetivo.cod + ' · Cantidad ' + objetivo.cantidad + (objetivo.user ? '\nAgregado por ' + objetivo.user : ''))) return;
   consecQuitarPorId(objetivo.id);
   renderConsecList();
 }
@@ -8584,6 +8585,8 @@ function bulAddItem() {
 }
 function bulQuitar(cid) {
   const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b || b.estado !== 'abierto') return;
+  const it0 = b.items.filter(function(x) { return x.id === cid; })[0];
+  if (!confirm('¿Seguro que quieres quitar este producto del bulto?' + (it0 ? '\n\n' + (it0.desc || it0.cod) + '\nCódigo ' + it0.cod + ' · Cantidad ' + it0.cantidad : ''))) return;
   const all = bulAll(), bb = all.filter(function(x) { return x.id === b.id; })[0]; bb.items = bb.items.filter(function(x) { return x.id !== cid; }); bulSet(all);
   bulEnc('—', 'Quitar de bulto', consecYo(), 'bulto_item_del', { bid: b.id, cid: cid }); bulRender();
 }
