@@ -3017,7 +3017,7 @@ function nuevoProductoSave() {
         <div id="consec-multi-info" style="font-size:12px;color:#58a6ff;margin-bottom:8px">Toca los consecutivos que quieres incluir</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="mod-back-btn" style="margin:0" onclick="consecMultiTodos()">Todos</button>
-          <button class="mod-back-btn" style="margin:0;border-color:#58a6ff;color:#58a6ff" onclick="exportConsecGuiaSel()">📋 Guía de despacho de los seleccionados</button>
+          <button class="mod-back-btn" style="margin:0;border-color:#58a6ff;color:#58a6ff" onclick="exportConsecGuiaSel()">📋 Registro picking de los seleccionados</button>
         </div>
       </div>
     </div>
@@ -3066,7 +3066,7 @@ function nuevoProductoSave() {
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
         <button class="mod-back-btn" onclick="exportConsecExcel()">📊 Exportar Excel (fecha y usuario)</button>
         <button class="mod-back-btn" onclick="exportConsecPDF()">📄 Exportar PDF (fecha y usuario)</button>
-        <button class="mod-back-btn" onclick="exportConsecGuia()" style="border-color:#58a6ff;color:#58a6ff">📋 Guía de despacho (consecutivo seleccionado)</button>
+        <button class="mod-back-btn" onclick="exportConsecGuia()" style="border-color:#58a6ff;color:#58a6ff">📋 Registro picking (consecutivo seleccionado)</button>
         <button class="mod-back-btn" onclick="consecClearList()">🗑 Limpiar este consecutivo</button>
       </div>
     </div>
@@ -4055,7 +4055,7 @@ function exportConsecGuia(nums) {
   // Cabecera
   doc.setFillColor(AZ[0], AZ[1], AZ[2]); doc.rect(ML, 36, CW, 38, 'F');
   doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('BODEGA DIMERC CONCEPCIÓN', ML + 10, 60);
-  doc.setFontSize(13); doc.text('GUÍA DE DESPACHO', ML + CW - 10, 60, { align: 'right' });
+  doc.setFontSize(13); doc.text('REGISTRO PICKING', ML + CW - 10, 60, { align: 'right' });
   doc.setTextColor(0, 0, 0);
   doc.autoTable({
     startY: 82, theme: 'grid', margin: { left: ML, right: ML },
@@ -4131,10 +4131,10 @@ function exportConsecGuia(nums) {
   const pc = doc.internal.getNumberOfPages();
   for (let i = 1; i <= pc; i++) {
     doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(120, 120, 120);
-    doc.text('Bodega Dimerc Concepción · Guía de despacho · ' + docNombre + ' · By: Vxniel', ML, H - 22);
+    doc.text('Bodega Dimerc Concepción · Registro picking · ' + docNombre + ' · By: Vxniel', ML, H - 22);
     doc.text('Página ' + i + ' de ' + pc, W - ML, H - 22, { align: 'right' });
   }
-  doc.save('Guia_Despacho_Consecutivo_' + d + '-' + m + '-' + y + '_(' + archN + ').pdf');
+  doc.save('Registro_Picking_Consecutivo_' + d + '-' + m + '-' + y + '_(' + archN + ').pdf');
 }
 
 // ── consec scanner ──
