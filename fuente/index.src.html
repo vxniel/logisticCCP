@@ -3911,9 +3911,7 @@ function renderConsecList() {
   emptyCard.style.display = 'none';
   const total = list.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0);
   count.textContent = list.length + (list.length===1 ? ' producto' : ' productos') + ' · ' + total + ' uni.';
-  const LIM = 10, recortar = list.length > LIM && !consecVerTodo, ini = recortar ? list.length - LIM : 0;
-  const masBtn = list.length > LIM ? '<button type="button" class="mod-back-btn" style="margin:0 0 8px" onclick="consecVerTodo=!consecVerTodo;renderConsecList()">' + (recortar ? '⬇ Mostrar todos (' + list.length + ') · viendo los últimos ' + LIM : '⬆ Mostrar menos (solo los últimos ' + LIM + ')') + '</button>' : '';
-  itemsList.innerHTML = masBtn + list.map((it, i) => i < ini ? '' : `
+  itemsList.innerHTML = list.map((it, i) => `
     <div class="hist-item">
       <div class="hist-item-name">${it.desc}</div>
       <div class="hist-item-sub">Código: <b style="color:#e6edf3">${it.cod}</b> · Ubicación: ${it.ubic} · Cantidad: <b style="color:#3fb950">${it.cantidad}</b></div>
@@ -3923,7 +3921,6 @@ function renderConsecList() {
       </div>
     </div>`).join('');
 }
-let consecVerTodo = false;
 
 // Grupos de la fecha seleccionada, uno por consecutivo (con filtro opcional de usuario)
 function getConsecGrupos() {
