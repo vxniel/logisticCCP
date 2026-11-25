@@ -3920,6 +3920,40 @@ function trasRevisarItem(it, esLocal) {
 // Detalle por caja (bulto) del consecutivo visto: encabezado con flecha; cada caja se despliega con sus productos
 let consecCajasAbierto = true, consecCajasExp = {};
 function consecCajasToggle() { consecCajasAbierto = !consecCajasAbierto; consecRenderCajas(); }
+// Editar / eliminar un bulto desde el desglose de la fecha (solo usuarios completos; si está cerrado pide la contraseña)
+function bulPass(txt) {
+  const yo = consecYo(), clave = (typeof USERS !== 'undefined' && USERS[yo]) || null;
+  const v = prompt(txt + '\nEscribe tu contraseña:'); if (v === null) return false;
+  if (!clave || String(v) !== String(clave)) { alert('Contraseña incorrecta.'); return false; }
+  return true;
+}
+function bulQuitarLineasConsec(b) {
+  consecAll().filter(function(x) { return x.bulto === b.id; }).forEach(function(x) { consecQuitarPorId(x.id); });
+}
+function bulListaEliminar(id) {
+  const b = bulGet(id); if (!b) return;
+  if (b.estado === 'cerrado') {
+    if (!confirm('El bulto ' + b.id + ' está cerrado: se quitarán también sus ' + b.items.length + ' línea(s) de ' + consecNombre(b.fecha, b.consec) + '. ¿Eliminar?')) return;
+    if (!bulPass('Eliminar bulto cerrado.')) return;
+    bulQuitarLineasConsec(b);
+  } else if (!confirm('¿Eliminar el bulto ' + b.id + (b.estado === 'anulado' ? ' (nulo)' : ' y sus ' + b.items.length + ' línea(s)') + '?')) return;
+  bulSet(bulAll().filter(function(x) { return x.id !== b.id; }));
+  bulEnc('—', 'Bulto eliminado', consecYo(), 'bulto_borrar', { bid: b.id });
+  delete consecCajasExp[id]; if (BUL_SEL === id) BUL_SEL = null;
+  renderConsecList(); try { bulRender(); } catch(e) {}
+}
+function bulListaEditar(id) {
+  const b = bulGet(id); if (!b) return;
+  if (b.estado === 'anulado') { alert('Este bulto está nulo (se eliminó su consecutivo): no se puede editar. Puedes eliminarlo de la lista.'); return; }
+  if (b.estado === 'cerrado') {
+    if (!confirm('Para editar el bulto ' + b.id + ' se reabre: sus líneas salen de ' + consecNombre(b.fecha, b.consec) + ' y al volver a cerrarlo se agregan al final. ¿Continuar?')) return;
+    if (!bulPass('Editar bulto cerrado.')) return;
+    bulQuitarLineasConsec(b);
+    const ba = bulAll(), bb = ba.filter(function(x) { return x.id === id; })[0]; bb.estado = 'abierto'; bulSet(ba);
+    bulEnc('—', 'Bulto reabierto', consecYo(), 'bulto_abrir', { bid: id, n: b.consec });
+  }
+  bulAbrirDesdeConsec(id);
+}
 function consecCajaToggle(id) { consecCajasExp[id] = !consecCajasExp[id]; renderConsecList(); }
 function consecRenderCajas() {
   const card = document.getElementById('consec-cajas-card'); if (!card) return;
@@ -4191,7 +4225,7 @@ function renderConsecList() {
       h += '<div style="padding:6px 0 2px;display:flex;flex-direction:column;gap:6px">' + (b.items.length ? b.items.map(function(it) {
         return '<div class="hist-item"><div class="hist-item-name">' + trasEsc(it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + trasEsc(it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + trasEsc(it.cantidad) + '</b></div><div class="hist-item-user" style="margin:4px 0 0">👤 ' + trasEsc(it.user) + ' · 🕐 ' + trasEsc(it.ts) + '</div></div>';
       }).join('') : '<div style="font-size:12px;color:#7d8590">Esta caja aún no tiene productos.</div>')
-        + (USUARIOS_COMPLETOS.indexOf(consecYo()) >= 0 ? '<button type="button" class="mod-back-btn" style="margin:2px 0 0" onclick="bulAbrirDesdeConsec(\'' + b.id + '\')">📦 Abrir ficha / reimprimir etiqueta</button>' : '') + '</div>';
+        + (USUARIOS_COMPLETOS.indexOf(consecYo()) >= 0 ? '<button type="button" class="mod-back-btn" style="margin:2px 0 0" onclick="bulAbrirDesdeConsec(\'' + b.id + '\')">📦 Abrir ficha / reimprimir etiqueta</button><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="mod-back-btn" style="margin:0;flex:1" onclick="bulListaEditar(\'' + b.id + '\')">✏️ Editar bulto</button><button type="button" class="mod-back-btn" style="margin:0;flex:1;border-color:#f85149;color:#f85149" onclick="bulListaEliminar(\'' + b.id + '\')">🗑 Eliminar bulto</button></div>' : '') + '</div>';
     }
     return h + '</div>';
   }).join('');
@@ -8245,6 +8279,7 @@ window.bultoAplicarCambio = function(d) {
     bulSet(all); return true;
   }
   if (d.tipo === 'bulto_item_del') { const n0 = b.items.length; b.items = b.items.filter(function(x) { return x.id !== d.cid; }); if (b.items.length === n0) return false; bulSet(all); return true; }
+  if (d.tipo === 'bulto_abrir') { if (b.estado === 'abierto' || b.estado === 'anulado') return false; b.estado = 'abierto'; if (d.n) b.consec = d.n; bulSet(all); return true; }
   if (d.tipo === 'bulto_cerrar') { const nuevo = consecEsBorrado(b.fecha, d.n) ? 'anulado' : 'cerrado'; if (b.estado === nuevo && b.consec === d.n) return false; b.estado = nuevo; b.consec = d.n; bulSet(all); return true; }
   return false;
 };
