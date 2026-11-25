@@ -3008,7 +3008,11 @@ function nuevoProductoSave() {
       <div class="mod-step-desc" style="margin:10px 0 6px">👤 Filtrar / exportar por usuario</div>
       <select id="consec-user-sel" style="width:100%;height:50px;line-height:normal;padding:0 12px;box-sizing:border-box;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:16px"></select>
       <div class="mod-step-desc" style="margin:10px 0 6px">Consecutivos (toca uno para verlo)</div>
-      <div id="consec-chips" style="display:flex;flex-wrap:wrap"></div>
+      <div id="consec-acc-head" onclick="consecAccToggle()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border:1px solid #30363d;border-radius:10px;background:#0d1117">
+        <span id="consec-acc-title" style="font-size:14px;font-weight:700;color:#e6edf3"></span>
+        <span id="consec-acc-arrow" style="font-size:16px;color:#58a6ff"></span>
+      </div>
+      <div id="consec-chips" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
         <button class="mod-back-btn" id="consec-nuevo-btn" style="margin:0" onclick="consecNuevo()">➕ Nuevo consecutivo</button>
         <button class="mod-back-btn" id="consec-selmode-btn" style="margin:0" onclick="consecToggleMulti()">☑️ Seleccionar cons.</button>
@@ -3876,6 +3880,13 @@ function trasRevisarItem(it, esLocal) {
     } catch(e) {}
   }, 1000);
 })();
+let consecAccAbierto = true;
+function consecAccAplicar() {
+  const c = document.getElementById('consec-chips'), ar = document.getElementById('consec-acc-arrow');
+  if (c) c.style.display = consecAccAbierto ? 'flex' : 'none';
+  if (ar) ar.innerHTML = consecAccAbierto ? '&#9652;' : '&#9662;';
+}
+function consecAccToggle() { consecAccAbierto = !consecAccAbierto; consecAccAplicar(); }
 let consecPlegado = false;
 function consecAplicarPlegado() {
   const l = document.getElementById('consec-items-list'), c = document.getElementById('consec-chev');
@@ -4095,10 +4106,16 @@ function renderConsecList() {
     if (del.length) ns = del;
   }
   if (ns.indexOf(consecSel.n) < 0) consecSel.n = ns[ns.length - 1];
+  // Desglose de la fecha: encabezado con flecha; al abrirlo se listan hacia abajo los consecutivos de esa fecha (con sus totales)
+  const todosIt = consecAll();
   if (chips) chips.innerHTML = ns.map(function(n) {
     const act = consecMulti.on ? !!consecMulti.sel[n] : consecSel.n === n;
-    return '<button type="button" class="jaula-btn ' + (act ? 'active' : '') + '" style="margin:0 6px 6px 0" onclick="consecElegir(' + n + ')">' + (consecMulti.on ? (act ? '☑ ' : '☐ ') : '') + consecNombre(consecSel.fecha, n) + '</button>';
+    const its = todosIt.filter(function(it) { return it.fecha === consecSel.fecha && it.n === n; });
+    const uni = its.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0);
+    return '<button type="button" class="jaula-btn ' + (act ? 'active' : '') + '" style="margin:0;width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px" onclick="consecElegir(' + n + ')"><span>' + (consecMulti.on ? (act ? '☑ ' : '☐ ') : '') + consecNombre(consecSel.fecha, n) + '</span><span style="font-size:11px;font-weight:600;opacity:.8">' + its.length + ' prod. · ' + uni + ' uni.</span></button>';
   }).join('');
+  const ah = document.getElementById('consec-acc-title'); if (ah) ah.textContent = '📅 ' + consecFmtFecha(consecSel.fecha) + ' · ' + ns.length + (ns.length === 1 ? ' consecutivo' : ' consecutivos');
+  consecAccAplicar();
   const mb = document.getElementById('consec-multi-bar'); if (mb) mb.style.display = consecMulti.on ? 'block' : 'none';
   const sb = document.getElementById('consec-selmode-btn'); if (sb) sb.textContent = consecMulti.on ? '✖ Salir de selección' : '☑️ Seleccionar cons.';
   const mi = document.getElementById('consec-multi-info'); if (mi) { const k = Object.keys(consecMulti.sel).filter(function(x) { return consecMulti.sel[x] && ns.indexOf(Number(x)) >= 0; }).length; mi.textContent = k ? k + ' consecutivo(s) seleccionado(s)' : 'Toca los consecutivos que quieres incluir'; }
