@@ -3637,12 +3637,6 @@ function nuevoProductoSave() {
           <button class="mod-back-btn" id="bl-borrar-btn" style="margin:0;border-color:#f85149;color:#f85149" onclick="bulBorrar()">🗑 Eliminar bulto</button>
         </div>
       </div>
-      <div class="mod-card" id="bl-guia-card">
-        <div class="mod-step-label" style="font-size:14px">📄 Guía de despacho</div>
-        <div class="mod-step-desc">Marca los bultos cerrados que van en la guía.</div>
-        <div id="bl-guia-list" style="margin:8px 0"></div>
-        <button class="mod-confirm-btn" onclick="bulEmitirGuia()">📄 Emitir guía de despacho</button>
-      </div>
     </div><!-- /bc-panel-bulto -->
 
     <div id="bc-panel-verif" style="display:none">
@@ -8535,11 +8529,6 @@ function bulRender() {
     }).join('') : '<div style="font-size:12px;color:#7d8590">Este bulto aún no tiene productos.</div>';
     if (anulado) document.getElementById('bl-items').innerHTML = '';
   }
-  const cer = lista.filter(function(x) { return x.estado === 'cerrado'; });
-  document.getElementById('bl-guia-list').innerHTML = cer.length ? cer.map(function(x) {
-    const u = x.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0);
-    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;color:#e6edf3"><input type="checkbox" ' + (BUL_GUIA[x.id] === false ? '' : 'checked') + ' onchange="BUL_GUIA[\'' + x.id + '\']=this.checked" style="width:18px;height:18px"> 🔒 ' + x.id + ' · ' + x.items.length + ' líneas · ' + u + ' uni. · ' + consecNombre(x.fecha, x.consec) + '</label>';
-  }).join('') : '<div style="font-size:12px;color:#7d8590">No hay bultos cerrados en esta fecha.</div>';
 }
 function bulBuscarProd(v) {
   const prev = document.getElementById('bl-prod'), qty = document.getElementById('bl-qty-row');
