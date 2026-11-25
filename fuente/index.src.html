@@ -8284,7 +8284,7 @@ function verRender() {
       : caja('#f85149', '❌ Bulto no encontrado', 'El código <b>' + E(VER_MSG.v) + '</b> no existe en este equipo. Si la caja es de otro equipo, revisa la conexión (se sincroniza solo) o la fecha.');
   } else if (VER_ID && bulGet(VER_ID)) {
     const b = bulGet(VER_ID), dt = blDatos(b);
-    const cab = b.estado === 'cerrado' ? caja('#3fb950', '✅ ETIQUETA VÁLIDA · Cerrado', 'Guardado en ' + E(consecNombre(b.fecha, b.consec)))
+    const cab = b.estado === 'cerrado' ? caja('#3fb950', '🔒 ETIQUETA VÁLIDA · Cerrado', 'Guardado en ' + E(consecNombre(b.fecha, b.consec)))
       : (b.estado === 'anulado' ? caja('#f85149', '🚫 ETIQUETA NULA', 'Se eliminó el consecutivo de esta caja: no la uses.')
       : caja('#58a6ff', '🟢 BULTO ABIERTO', 'Aún se pueden agregar productos' + (b.consec ? ' · vinculado a ' + E(consecNombre(b.fecha, b.consec)) : '') + '. Falta cerrarlo para que pase al consecutivo.'));
     res.style.display = 'block';
