@@ -3523,6 +3523,9 @@ function nuevoProductoSave() {
       <button type="button" id="bc-tab-barra" class="jaula-btn active" style="flex:1;margin:0" onclick="bcPanel('barra')">🏷️ Código de barra</button>
       <button type="button" id="bc-tab-bulto" class="jaula-btn" style="flex:1;margin:0" onclick="bcPanel('bulto')">📦 Código bulto</button>
     </div>
+    <div style="display:flex;margin:-2px 0 10px">
+      <button type="button" id="bc-tab-verif" class="jaula-btn" style="flex:1;margin:0" onclick="bcPanel('verif')">✅ Verificar código bultos</button>
+    </div>
 
     <div id="bc-panel-barra">
     <div class="mod-card">
@@ -3628,6 +3631,23 @@ function nuevoProductoSave() {
         <button class="mod-confirm-btn" onclick="bulEmitirGuia()">📄 Emitir guía de despacho</button>
       </div>
     </div><!-- /bc-panel-bulto -->
+
+    <div id="bc-panel-verif" style="display:none">
+      <div class="mod-card">
+        <div class="mod-step-label">✅ Verificar código bultos</div>
+        <div class="mod-step-desc">Escanea o digita el código de barra de la etiqueta que salió de la Zebra: se muestra qué productos tiene asignados esa caja y queda marcada como verificada.</div>
+        <div class="sbox" style="margin-top:10px"><span class="sico">📦</span><input id="ver-inp" type="text" placeholder="Escanea o digita el código del bulto" autocomplete="off" autocapitalize="characters" oninput="verInput(this.value)" onkeydown="if(event.keyCode===13){verEnter();}"/></div>
+        <button class="mod-confirm-btn" style="margin-top:8px" onclick="verEnter()">🔎 Verificar</button>
+      </div>
+      <div class="mod-card" id="ver-res" style="display:none"></div>
+      <div class="mod-card">
+        <div class="mod-step-desc" style="margin-bottom:6px">📅 Fecha de las etiquetas</div>
+        <div class="lfield"><input id="ver-fecha" type="date" onchange="verRender()"/></div>
+        <div id="ver-prog" style="font-size:13px;color:#8b949e;margin:10px 0 6px"></div>
+        <div id="ver-lista" style="display:flex;flex-direction:column;gap:6px"></div>
+        <button class="mod-back-btn" style="margin-top:10px" onclick="verLimpiar()">↺ Reiniciar verificación de la fecha</button>
+      </div>
+    </div><!-- /bc-panel-verif -->
 
 
   </div>
@@ -8195,15 +8215,86 @@ window.bultoAplicarCambio = function(d) {
 };
 function bulRefrescar() {
   clearTimeout(window._bulT);
-  window._bulT = setTimeout(function() { try { const p = document.getElementById('bc-panel-bulto'); if (p && p.style.display !== 'none') bulRender(); } catch(e) {} }, 200);
+  window._bulT = setTimeout(function() { try { const p = document.getElementById('bc-panel-bulto'); if (p && p.style.display !== 'none') bulRender(); const q = document.getElementById('bc-panel-verif'); if (q && q.style.display !== 'none') verRender(); } catch(e) {} }, 200);
 }
 function bcPanel(cual) {
-  const b = cual === 'bulto';
-  document.getElementById('bc-panel-barra').style.display = b ? 'none' : '';
+  const b = cual === 'bulto', v = cual === 'verif';
+  document.getElementById('bc-panel-barra').style.display = (b || v) ? 'none' : '';
   document.getElementById('bc-panel-bulto').style.display = b ? '' : 'none';
-  document.getElementById('bc-tab-barra').classList.toggle('active', !b);
+  document.getElementById('bc-panel-verif').style.display = v ? '' : 'none';
+  document.getElementById('bc-tab-barra').classList.toggle('active', !b && !v);
   document.getElementById('bc-tab-bulto').classList.toggle('active', b);
+  document.getElementById('bc-tab-verif').classList.toggle('active', v);
   if (b) { const f = document.getElementById('bl-fecha'); if (!f.value) f.value = consecHoyKey(); bulRender(); }
+  if (v) { const f = document.getElementById('ver-fecha'); if (!f.value) f.value = consecHoyKey(); verRender(); setTimeout(function() { try { document.getElementById('ver-inp').focus(); } catch(e) {} }, 80); }
+}
+// ---- Verificar código bultos (escanear/digitar la etiqueta y ver su contenido) ----
+let VER_ID = null, VER_MSG = null;
+function verMarcas() { try { return JSON.parse(localStorage.getItem('dimerc_bul_verif') || '{}'); } catch(e) { return {}; } }
+function verMarcar(id) { const m = verMarcas(); m[id] = Date.now(); try { localStorage.setItem('dimerc_bul_verif', JSON.stringify(m)); } catch(e) {} }
+function verBuscar(txt) {
+  const t = String(txt || '').trim().toUpperCase().replace(/\s+/g, ''); if (!t) return null;
+  const b = bulGet(t); if (b) return { b: b };
+  const c = bulAll().filter(function(x) { return x.id.indexOf(t) === 0; });
+  if (c.length === 1) return { b: c[0] };
+  if (c.length > 1) return { multi: c.length, t: t };
+  return { nada: t };
+}
+function verMostrar(id) {
+  VER_ID = id; VER_MSG = null; const b = bulGet(id);
+  if (b) { verMarcar(id); document.getElementById('ver-fecha').value = b.fecha; }
+  verRender();
+}
+function verInput(v) {
+  const bl = blParse(v); if (!bl || !/-\d{2,3}[A-Z0-9]{2}$/i.test(String(v).trim())) return;
+  const r = verBuscar(v); if (r && r.b) { document.getElementById('ver-inp').value = ''; verMostrar(r.b.id); }
+}
+function verEnter() {
+  const inp = document.getElementById('ver-inp'), v = inp.value; if (!String(v).trim()) return;
+  const r = verBuscar(v); inp.value = '';
+  if (r && r.b) { verMostrar(r.b.id); }
+  else { VER_ID = null; VER_MSG = r && r.multi ? { t: 'multi', v: r.t, n: r.multi } : { t: 'nada', v: (r && r.nada) || String(v).trim().toUpperCase() }; verRender(); }
+  try { inp.focus(); } catch(e) {}
+}
+function verLimpiar() {
+  const f = document.getElementById('ver-fecha').value; if (!f) return;
+  if (!confirm('¿Reiniciar la verificación de las etiquetas del ' + consecFmtFecha(f) + '?')) return;
+  const m = verMarcas(); bulAll().forEach(function(b) { if (b.fecha === f) delete m[b.id]; });
+  try { localStorage.setItem('dimerc_bul_verif', JSON.stringify(m)); } catch(e) {}
+  VER_ID = null; verRender();
+}
+function verRender() {
+  const res = document.getElementById('ver-res'); if (!res) return;
+  const E = trasEsc, m = verMarcas();
+  const caja = function(col, tit, sub) { return '<div style="border:2px solid ' + col + ';border-radius:12px;padding:12px;margin-bottom:10px;background:#0d1117"><div style="font-size:17px;font-weight:800;color:' + col + '">' + tit + '</div>' + (sub ? '<div style="font-size:12px;color:#8b949e;margin-top:3px">' + sub + '</div>' : '') + '</div>'; };
+  if (VER_MSG) {
+    res.style.display = 'block';
+    res.innerHTML = VER_MSG.t === 'multi'
+      ? caja('#d29922', '⚠️ Código incompleto', 'Hay ' + VER_MSG.n + ' bultos que empiezan con <b>' + E(VER_MSG.v) + '</b>. Escanea la etiqueta completa.')
+      : caja('#f85149', '❌ Bulto no encontrado', 'El código <b>' + E(VER_MSG.v) + '</b> no existe en este equipo. Si la caja es de otro equipo, revisa la conexión (se sincroniza solo) o la fecha.');
+  } else if (VER_ID && bulGet(VER_ID)) {
+    const b = bulGet(VER_ID), dt = blDatos(b);
+    const cab = b.estado === 'cerrado' ? caja('#3fb950', '✅ ETIQUETA VÁLIDA · Cerrado', 'Guardado en ' + E(consecNombre(b.fecha, b.consec)))
+      : (b.estado === 'anulado' ? caja('#f85149', '🚫 ETIQUETA NULA', 'Se eliminó el consecutivo de esta caja: no la uses.')
+      : caja('#58a6ff', '🟢 BULTO ABIERTO', 'Aún se pueden agregar productos' + (b.consec ? ' · vinculado a ' + E(consecNombre(b.fecha, b.consec)) : '') + '. Falta cerrarlo para que pase al consecutivo.'));
+    res.style.display = 'block';
+    res.innerHTML = cab
+      + '<div style="font-size:15px;font-weight:800;color:#58a6ff">📦 ' + E(b.id) + '</div>'
+      + '<div style="font-size:12px;color:#8b949e;margin:3px 0 10px">Fecha ' + dt.fecha + ' · Creado por ' + E(b.user || '—') + ' · <b style="color:#e6edf3">' + dt.art + '</b> artículos · <b style="color:#3fb950">' + dt.uni + '</b> unidades</div>'
+      + '<div style="display:flex;flex-direction:column;gap:6px">' + (b.items.length ? b.items.map(function(it) {
+        return '<div class="hist-item"><div class="hist-item-name">' + E(it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + E(it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + E(it.cantidad) + '</b></div><div class="hist-item-user" style="margin:4px 0 0">👤 ' + E(it.user) + ' · 🕐 ' + E(it.ts) + '</div></div>';
+      }).join('') : '<div style="font-size:13px;color:#d29922">⚠️ Esta caja no tiene productos asignados.</div>') + '</div>'
+      + '<button type="button" class="mod-back-btn" style="margin:10px 0 0" onclick="bulAbrirDesdeConsec(\'' + b.id + '\')">📦 Abrir ficha / reimprimir etiqueta</button>';
+  } else { res.style.display = 'none'; }
+  // lista de la fecha con marca de verificadas
+  const f = document.getElementById('ver-fecha').value || consecHoyKey();
+  const lista = bulAll().filter(function(b) { return b.fecha === f; }).sort(function(a, b) { return a.num - b.num || (a.id < b.id ? -1 : 1); });
+  const vals = lista.filter(function(b) { return b.estado !== 'anulado'; }), ok = vals.filter(function(b) { return m[b.id]; }).length;
+  document.getElementById('ver-prog').innerHTML = lista.length ? 'Verificadas <b style="color:#3fb950">' + ok + '</b> de <b style="color:#e6edf3">' + vals.length + '</b> etiquetas' + (vals.length - ok ? ' · faltan <b style="color:#d29922">' + (vals.length - ok) + '</b>' : ' ✅') : 'No hay bultos en esta fecha.';
+  document.getElementById('ver-lista').innerHTML = lista.map(function(b) {
+    const v = !!m[b.id], nulo = b.estado === 'anulado', ic = nulo ? '🚫' : (v ? '✅' : '⬜'), col = nulo ? '#f85149' : (v ? '#3fb950' : '#8b949e'), dt = blDatos(b);
+    return '<div onclick="verMostrar(\'' + b.id + '\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;border:1px solid ' + (VER_ID === b.id ? '#58a6ff' : '#30363d') + ';border-radius:10px;background:#0d1117"><div><div style="font-weight:700;font-size:13px;color:#e6edf3">' + ic + ' ' + E(b.id) + '</div><div style="font-size:11px;color:#8b949e;margin-top:2px">' + bulIcono(b) + ' ' + (nulo ? 'Nulo' : (b.estado === 'cerrado' ? 'Cerrado' : 'Abierto')) + ' · ' + dt.art + ' art. · ' + dt.uni + ' un.</div></div><div style="font-size:11px;color:' + col + ';font-weight:700">' + (nulo ? 'NULO' : (v ? 'Verificada' : 'Pendiente')) + '</div></div>';
+  }).join('');
 }
 function bulNuevo() {
   const yo = consecYo(); if (!yo) { alert('Inicia sesión.'); return; }
