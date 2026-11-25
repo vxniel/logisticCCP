@@ -8229,7 +8229,8 @@ function bcPanel(cual) {
   if (v) { const f = document.getElementById('ver-fecha'); if (!f.value) f.value = consecHoyKey(); verRender(); setTimeout(function() { try { document.getElementById('ver-inp').focus(); } catch(e) {} }, 80); }
 }
 // ---- Verificar código bultos (escanear/digitar la etiqueta y ver su contenido) ----
-let VER_ID = null, VER_MSG = null;
+let VER_ID = null, VER_MSG = null, VER_EXP = {};
+function verFila(id) { const ab = !VER_EXP[id]; VER_EXP = {}; if (ab) { VER_EXP[id] = true; verMarcar(id); } VER_ID = id; VER_MSG = null; verRender(); }
 function verMarcas() { try { return JSON.parse(localStorage.getItem('dimerc_bul_verif') || '{}'); } catch(e) { return {}; } }
 function verMarcar(id) { const m = verMarcas(); m[id] = Date.now(); try { localStorage.setItem('dimerc_bul_verif', JSON.stringify(m)); } catch(e) {} }
 function verBuscar(txt) {
@@ -8241,7 +8242,7 @@ function verBuscar(txt) {
   return { nada: t };
 }
 function verMostrar(id) {
-  VER_ID = id; VER_MSG = null; const b = bulGet(id);
+  VER_ID = id; VER_MSG = null; VER_EXP = {}; VER_EXP[id] = true; const b = bulGet(id);
   if (b) { verMarcar(id); document.getElementById('ver-fecha').value = b.fecha; }
   verRender();
 }
@@ -8292,8 +8293,15 @@ function verRender() {
   const vals = lista.filter(function(b) { return b.estado !== 'anulado'; }), ok = vals.filter(function(b) { return m[b.id]; }).length;
   document.getElementById('ver-prog').innerHTML = lista.length ? 'Verificadas <b style="color:#3fb950">' + ok + '</b> de <b style="color:#e6edf3">' + vals.length + '</b> etiquetas' + (vals.length - ok ? ' · faltan <b style="color:#d29922">' + (vals.length - ok) + '</b>' : ' ✅') : 'No hay bultos en esta fecha.';
   document.getElementById('ver-lista').innerHTML = lista.map(function(b) {
-    const v = !!m[b.id], nulo = b.estado === 'anulado', ic = nulo ? '🚫' : (v ? '✅' : '⬜'), col = nulo ? '#f85149' : (v ? '#3fb950' : '#8b949e'), dt = blDatos(b);
-    return '<div onclick="verMostrar(\'' + b.id + '\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;border:1px solid ' + (VER_ID === b.id ? '#58a6ff' : '#30363d') + ';border-radius:10px;background:#0d1117"><div><div style="font-weight:700;font-size:13px;color:#e6edf3">' + ic + ' ' + E(b.id) + '</div><div style="font-size:11px;color:#8b949e;margin-top:2px">' + bulIcono(b) + ' ' + (nulo ? 'Nulo' : (b.estado === 'cerrado' ? 'Cerrado' : 'Abierto')) + ' · ' + dt.art + ' art. · ' + dt.uni + ' un.</div></div><div style="font-size:11px;color:' + col + ';font-weight:700">' + (nulo ? 'NULO' : (v ? 'Verificada' : 'Pendiente')) + '</div></div>';
+    const v = !!m[b.id], nulo = b.estado === 'anulado', ic = nulo ? '🚫' : (v ? '✅' : '⬜'), col = nulo ? '#f85149' : (v ? '#3fb950' : '#8b949e'), dt = blDatos(b), ab = !!VER_EXP[b.id];
+    let h = '<div style="border:1px solid ' + (VER_ID === b.id ? '#58a6ff' : '#30363d') + ';border-radius:10px;background:#0d1117"><div onclick="verFila(\'' + b.id + '\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px"><div><div style="font-weight:700;font-size:13px;color:#e6edf3">' + ic + ' ' + E(b.id) + '</div><div style="font-size:11px;color:#8b949e;margin-top:2px">' + bulIcono(b) + ' ' + (nulo ? 'Nulo' : (b.estado === 'cerrado' ? 'Cerrado' : 'Abierto')) + ' · ' + dt.art + ' art. · ' + dt.uni + ' un.</div></div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:' + col + ';font-weight:700">' + (nulo ? 'NULO' : (v ? 'Verificada' : 'Pendiente')) + '</span><span style="font-size:16px;color:#58a6ff">' + (ab ? '&#9652;' : '&#9662;') + '</span></div></div>';
+    if (ab) {
+      h += '<div style="padding:0 12px 10px;display:flex;flex-direction:column;gap:6px">' + (b.items.length ? b.items.map(function(it) {
+        return '<div class="hist-item"><div class="hist-item-name">' + E(it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + E(it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + E(it.cantidad) + '</b></div><div class="hist-item-user" style="margin:4px 0 0">👤 ' + E(it.user) + ' · 🕐 ' + E(it.ts) + '</div></div>';
+      }).join('') : '<div style="font-size:12px;color:#d29922">⚠️ Esta caja no tiene productos asignados.</div>')
+        + '<button type="button" class="mod-back-btn" style="margin:4px 0 0" onclick="bulAbrirDesdeConsec(\'' + b.id + '\')">📦 Abrir ficha / reimprimir etiqueta</button></div>';
+    }
+    return h + '</div>';
   }).join('');
 }
 function bulNuevo() {
