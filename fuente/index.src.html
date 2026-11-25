@@ -3573,11 +3573,20 @@ function nuevoProductoSave() {
         <div id="bl-estado" style="font-size:12px;color:#58a6ff;margin:4px 0 8px"></div>
         <div class="bc-preview-box" id="bl-preview-box" style="display:flex">
           <div class="bc-preview-label" id="bl-preview-label" style="white-space:pre-line;text-align:center"></div>
-          <div class="bc-preview-svg-wrap"><svg id="bl-svg"></svg></div>
+          <div class="bc-preview-svg-wrap" id="bl-svg-wrap"></div>
         </div>
+        <div class="mod-step-desc" style="margin:10px 0 6px">📐 Tamaño de etiqueta (impresora Zebra)</div>
+        <select id="bl-tam" onchange="blSetTam(this.value)" style="width:100%;height:46px;padding:0 12px;box-sizing:border-box;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:15px">
+          <option value="100x150">100 × 150 mm (4 × 6 pulg.)</option>
+          <option value="100x100">100 × 100 mm</option>
+          <option value="100x50">100 × 50 mm</option>
+          <option value="60x40">60 × 40 mm</option>
+        </select>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          <button class="mod-back-btn" onclick="bcDescargarPNG('bl-svg','bl-preview-label',BUL_SEL)">📥 Descargar PNG</button>
           <button class="mod-back-btn" onclick="blImprimir()">🖨️ Imprimir etiqueta</button>
+          <button class="mod-back-btn" onclick="blDescargarZPL()">⬇️ Descargar ZPL (Zebra)</button>
+          <button class="mod-back-btn" onclick="blCopiarZPL()">📋 Copiar ZPL</button>
+          <button class="mod-back-btn" onclick="bcDescargarPNG('bl-svg','bl-preview-label',BUL_SEL)">📥 PNG</button>
         </div>
         <div id="bl-add" style="margin-top:14px">
           <div class="mod-step-desc" style="margin-bottom:6px">➕ Asignar producto al bulto</div>
@@ -8128,7 +8137,8 @@ function bulRender() {
     const uni = b.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0), cerrado = b.estado === 'cerrado';
     document.getElementById('bl-titulo').textContent = '📦 Bulto ' + b.id;
     document.getElementById('bl-estado').textContent = (cerrado ? '🔒 Cerrado → ' + consecNombre(b.fecha, b.consec) : '🟢 Abierto') + ' · ' + Object.keys(cods).length + ' artículos · ' + uni + ' unidades';
-    try { JsBarcode(document.getElementById('bl-svg'), b.id, { format: 'CODE128', lineColor: '#000', width: 2, height: 80, displayValue: true, fontSize: 16, margin: 10 }); } catch(e) {}
+    try { document.getElementById('bl-svg-wrap').innerHTML = c128Svg(b.id, { mod: 2, h: 80, id: 'bl-svg' }); } catch(e) { document.getElementById('bl-svg-wrap').textContent = 'No se pudo dibujar el código'; }
+    document.getElementById('bl-tam').value = blTam();
     document.getElementById('bl-preview-label').textContent = 'BODEGA DIMERC CONCEPCIÓN\nBULTO ' + b.id;
     document.getElementById('bl-add').style.display = cerrado ? 'none' : '';
     document.getElementById('bl-cerrar-btn').style.display = cerrado ? 'none' : '';
@@ -8225,12 +8235,76 @@ function bulEmitirGuia() {
   guiaGenerar({ titulo: 'GUÍA DE DESPACHO', pie: 'Guía de despacho', docNombre: sel.length === 1 ? 'Bulto ' + sel[0].id : sel.length + ' bultos (' + sel[0].id + ' a ' + sel[sel.length - 1].id + ')', fecha: f, its: its, bultos: sel,
     archivo: 'Guia_Despacho_' + fp[2] + '-' + fp[1] + '-' + fp[0] + '_(' + sel.map(function(b) { return b.num; }).join('+') + ').pdf' });
 }
+// ===== Etiqueta del bulto: código de barras propio (Code 128-B, sin librerías externas), impresión por tamaño de etiqueta y ZPL para impresoras Zebra =====
+const C128_BARS = ['11011001100','11001101100','11001100110','10010011000','10010001100','10001001100','10011001000','10011000100','10001100100','11001001000','11001000100','11000100100','10110011100','10011011100','10011001110','10111001100','10011101100','10011100110','11001110010','11001011100','11001001110','11011100100','11001110100','11101101110','11101001100','11100101100','11100100110','11101100100','11100110100','11100110010','11011011000','11011000110','11000110110','10100011000','10001011000','10001000110','10110001000','10001101000','10001100010','11010001000','11000101000','11000100010','10110111000','10110001110','10001101110','10111011000','10111000110','10001110110','11101110110','11010001110','11000101110','11011101000','11011100010','11011101110','11101011000','11101000110','11100010110','11101101000','11101100010','11100011010','11101111010','11001000010','11110001010','10100110000','10100001100','10010110000','10010000110','10000101100','10000100110','10110010000','10110000100','10011010000','10011000010','10000110100','10000110010','11000010010','11001010000','11110111010','11000010100','10001111010','10100111100','10010111100','10010011110','10111100100','10011110100','10011110010','11110100100','11110010100','11110010010','11011011110','11011110110','11110110110','10101111000','10100011110','10001011110','10111101000','10111100010','11110101000','11110100010','10111011110','10111101110','11101011110','11110101110','11010000100','11010010000','11010011100','1100011101011'];
+function c128Bits(txt) {
+  txt = String(txt); const idx = [104]; let sum = 104;
+  for (let i = 0; i < txt.length; i++) { const c = txt.charCodeAt(i) - 32; if (c < 0 || c > 95) throw new Error('carácter no válido'); idx.push(c); sum += c * (i + 1); }
+  idx.push(sum % 103); idx.push(106);
+  return idx.map(function(i) { return C128_BARS[i]; }).join('');
+}
+// SVG del código de barras. mod = ancho del módulo (px); h = alto (px); flex = true → se estira al tamaño del contenedor (viewBox)
+function c128Svg(txt, o) {
+  o = o || {}; const bits = c128Bits(txt), mod = o.mod || 2, h = o.h || 80, q = 10, W = bits.length * mod + q * 2;
+  let r = '', i = 0;
+  while (i < bits.length) { if (bits.charAt(i) === '1') { let j = i; while (j < bits.length && bits.charAt(j) === '1') j++; r += '<rect x="' + (q + i * mod) + '" y="0" width="' + ((j - i) * mod) + '" height="' + h + '" fill="#000"/>'; i = j; } else i++; }
+  const txtH = o.text === false ? 0 : 22;
+  const t = o.text === false ? '' : '<text x="' + (W / 2) + '" y="' + (h + 17) + '" text-anchor="middle" font-family="monospace" font-size="16" fill="#000">' + trasEsc(txt) + '</text>';
+  return '<svg xmlns="http://www.w3.org/2000/svg" id="' + (o.id || '') + '" width="' + W + '" height="' + (h + txtH) + '" viewBox="0 0 ' + W + ' ' + (h + txtH) + '" shape-rendering="crispEdges"><rect width="' + W + '" height="' + (h + txtH) + '" fill="#fff"/>' + r + t + '</svg>';
+}
+const BL_TAMS = { '100x150': [100, 150], '100x100': [100, 100], '100x50': [100, 50], '60x40': [60, 40] };
+function blTam() { let t = null; try { t = localStorage.getItem('dimerc_bl_tam'); } catch(e) {} return BL_TAMS[t] ? t : '100x150'; }
+function blSetTam(t) { try { localStorage.setItem('dimerc_bl_tam', t); } catch(e) {} }
+function blDatos(b) {
+  const cods = {}; b.items.forEach(function(it) { cods[it.cod] = 1; });
+  const f = b.fecha.split('-');
+  return { id: b.id, fecha: f[2] + '/' + f[1] + '/' + f[0], destino: b.estado === 'cerrado' ? consecNombre(b.fecha, b.consec) : '', art: Object.keys(cods).length, uni: b.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0) };
+}
+// Impresión: página del tamaño exacto de la etiqueta (sirve con el controlador Zebra/ZDesigner de Windows)
+function blHtmlEtiqueta(b, tam) {
+  const w = BL_TAMS[tam][0], h = BL_TAMS[tam][1], dt = blDatos(b), alta = h >= 90, peq = h < 45;
+  const fh = peq ? 3 : 4.6, fc = peq ? 5.2 : (alta ? 9 : 7), fi = peq ? 3 : (alta ? 4.6 : 3.8), bh = h * (peq ? 0.42 : (alta ? 0.4 : 0.36));
+  const bits = c128Bits(b.id), q = 10, W = bits.length + q * 2; let r = '', i = 0;
+  while (i < bits.length) { if (bits.charAt(i) === '1') { let j = i; while (j < bits.length && bits.charAt(j) === '1') j++; r += '<rect x="' + (q + i) + '" y="0" width="' + (j - i) + '" height="10" fill="#000"/>'; i = j; } else i++; }
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' 10" preserveAspectRatio="none" shape-rendering="crispEdges" style="width:94%;height:' + bh + 'mm;display:block">' + r + '</svg>';
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bulto ' + trasEsc(b.id) + '</title><style>@page{size:' + w + 'mm ' + h + 'mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}'
+    + 'body{width:' + w + 'mm;height:' + h + 'mm;font-family:Arial,Helvetica,sans-serif;color:#000;overflow:hidden}.l{width:' + w + 'mm;height:' + h + 'mm;padding:' + (peq ? 2 : 4) + 'mm;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;text-align:center}'
+    + '.h{font-weight:800;font-size:' + fh + 'mm}.c{font-weight:900;font-size:' + fc + 'mm;letter-spacing:.2mm}.i{font-size:' + fi + 'mm;font-weight:700}</style></head><body><div class="l">'
+    + '<div class="h">BODEGA DIMERC CONCEPCIÓN</div>' + svg + '<div class="c">' + trasEsc(b.id) + '</div>'
+    + (dt.destino ? '<div class="i">' + trasEsc(dt.destino) + '</div>' : '') + (!peq ? '<div class="i">' + dt.fecha + (dt.art ? ' · ' + dt.art + ' art. · ' + dt.uni + ' uni.' : '') + '</div>' : '')
+    + '</div></body></html>';
+}
 function blImprimir() {
-  const box = document.getElementById('bl-preview-box');
-  if (!box || !document.getElementById('bl-svg').innerHTML.trim()) { alert('Primero selecciona un bulto.'); return; }
-  const printArea = document.getElementById('bc-print-area');
-  printArea.innerHTML = box.outerHTML; window.print();
-  setTimeout(function() { printArea.innerHTML = ''; }, 300);
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b) { alert('Primero selecciona un bulto.'); return; }
+  const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+  document.body.appendChild(f);
+  const d = f.contentWindow.document; d.open(); d.write(blHtmlEtiqueta(b, blTam())); d.close();
+  setTimeout(function() { try { f.contentWindow.focus(); f.contentWindow.print(); } catch(e) { alert('No se pudo abrir la impresión: ' + e.message); } setTimeout(function() { try { f.remove(); } catch(e) {} }, 3000); }, 400);
+}
+// ZPL II (203 dpi = 8 puntos/mm) para impresoras Zebra (ZD230, ZD420, ZT410…)
+function blZPL(b, tam) {
+  const w = BL_TAMS[tam][0] * 8, h = BL_TAMS[tam][1] * 8, dt = blDatos(b), peq = h < 360, alta = h >= 800;
+  const fh = peq ? 22 : (alta ? 44 : 30), fc = peq ? 40 : (alta ? 100 : 70), fi = peq ? 24 : (alta ? 38 : 28), bh = peq ? 70 : (alta ? 300 : 150);
+  const n = b.id.length; let mod = w >= 700 ? 3 : 2; while (mod > 1 && mod * (11 * (n + 2) + 13) > w - 24) mod--;
+  const bw = mod * (11 * (n + 2) + 13), x = Math.max(0, Math.floor((w - bw) / 2));
+  let y = peq ? 14 : 30, z = '^XA\n^CI28\n^PW' + w + '\n^LL' + h + '\n^LH0,0\n';
+  const lin = function(txt, fs, bold) { z += '^FO0,' + y + '^FB' + w + ',1,0,C,0^A0N,' + fs + ',' + fs + '^FD' + txt + '^FS\n'; y += fs + (peq ? 8 : 14); };
+  lin('BODEGA DIMERC CONCEPCIÓN', fh);
+  z += '^BY' + mod + ',3,' + bh + '\n^FO' + x + ',' + y + '^BCN,' + bh + ',N,N,N^FD>:' + b.id + '^FS\n'; y += bh + (peq ? 8 : 16);
+  lin(b.id, fc);
+  if (dt.destino) lin(dt.destino, fi);
+  if (!peq) lin(dt.fecha + (dt.art ? '  ·  ' + dt.art + ' art.  ·  ' + dt.uni + ' uni.' : ''), fi);
+  return z + '^PQ1\n^XZ\n';
+}
+function blDescargarZPL() {
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b) { alert('Primero selecciona un bulto.'); return; }
+  const blob = new Blob([blZPL(b, blTam())], { type: 'text/plain;charset=utf-8' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'Bulto_' + b.id + '.zpl'; document.body.appendChild(a); a.click(); setTimeout(function() { a.remove(); }, 500);
+}
+function blCopiarZPL() {
+  const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b) { alert('Primero selecciona un bulto.'); return; }
+  const z = blZPL(b, blTam());
+  try { navigator.clipboard.writeText(z).then(function() { try { (window.showToast || function() {})('📋 ZPL copiado'); } catch(e) {} }, function() { prompt('Copia el ZPL:', z); }); } catch(e) { prompt('Copia el ZPL:', z); }
 }
 
 // ===== Trazabilidad (historial de ubicaciones/stock por producto) =====
