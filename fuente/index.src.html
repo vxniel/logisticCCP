@@ -3563,6 +3563,9 @@ function nuevoProductoSave() {
       <div class="mod-card">
         <div class="mod-step-desc" style="margin-bottom:6px">📅 Fecha</div>
         <div class="lfield"><input id="bl-fecha" type="date" onchange="bulRender()"/></div>
+        <div class="mod-step-desc" style="margin:10px 0 6px">👤 Filtrar por usuario</div>
+        <select id="bl-user-sel" onchange="BUL_USER=this.value;bulRender()" style="width:100%;height:50px;line-height:normal;padding:0 12px;box-sizing:border-box;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:16px"></select>
+        <div id="bl-sync" style="font-size:12px;color:#8b949e;margin:8px 0 0"></div>
         <div class="mod-step-desc" style="margin:10px 0 6px">Bultos de la fecha (toca uno)</div>
         <div id="bl-chips" style="display:flex;flex-wrap:wrap"></div>
         <div class="mod-step-desc" style="margin:6px 0">🔎 …o escanea el código de la caja</div>
@@ -4086,7 +4089,11 @@ function renderConsecList() {
   const itemsList = document.getElementById('consec-items-list');
   const count = document.getElementById('consec-count');
   const chips = document.getElementById('consec-chips');
-  const ns = consecNums(consecSel.fecha); if (!ns.length) ns.push(1);
+  let ns = consecNums(consecSel.fecha); if (!ns.length) ns.push(1);
+  if (consecSel.user !== '*') {   // con filtro de usuario solo se listan los consecutivos donde ese usuario tiene líneas
+    const todos = consecAll(), del = ns.filter(function(n) { return todos.some(function(it) { return it.fecha === consecSel.fecha && it.n === n && it.user === consecSel.user; }); });
+    if (del.length) ns = del;
+  }
   if (ns.indexOf(consecSel.n) < 0) consecSel.n = ns[ns.length - 1];
   if (chips) chips.innerHTML = ns.map(function(n) {
     const act = consecMulti.on ? !!consecMulti.sel[n] : consecSel.n === n;
@@ -8066,7 +8073,20 @@ function bcImprimir() {
 
 // ===== Bultos (cajas Dimerc): código de barra → asignar productos → cerrar y pasar a consecutivo → guía de despacho =====
 // Se sincronizan por el registro de cambios (tipos bulto_nuevo, bulto_item, bulto_item_del, bulto_cerrar, bulto_borrar).
-let BUL_SEL = null, BUL_PROD = null, BUL_GUIA = {};
+let BUL_SEL = null, BUL_PROD = null, BUL_GUIA = {}, BUL_USER = '*';
+// Estado de conexión de consecutivos y bultos: se refresca solo cada pocos segundos
+function sincEstadoTexto(okMsg) {
+  let pend = 0; try { pend = JSON.parse(localStorage.getItem('dimerc_cambios_pend') || '[]').filter(function(x) { return /^(bulto|consec)/.test(String(x.tipo)); }).length; } catch(e) {}
+  return !window._fbReady ? '🔴 Sin conexión con la base: lo que hagas se enviará solo al volver' : (pend ? '🟡 Enviando ' + pend + ' cambio(s)…' : okMsg);
+}
+setInterval(function() {
+  try {
+    const a = document.getElementById('bl-sync'), b = document.getElementById('consec-estado');
+    if (a) a.textContent = sincEstadoTexto('🟢 En línea: los bultos se actualizan solos en todos los equipos');
+    if (b) b.textContent = sincEstadoTexto('🟢 En línea: este consecutivo es compartido por todos los equipos');
+  } catch(e) {}
+}, 4000);
+function bulDeUsuario(b) { return BUL_USER === '*' || b.user === BUL_USER || b.items.some(function(it) { return it.user === BUL_USER; }); }
 function bulAll() { try { return JSON.parse(localStorage.getItem('dimerc_bultos') || '[]'); } catch(e) { return []; } }
 function bulSet(a) { try { localStorage.setItem('dimerc_bultos', JSON.stringify(a)); } catch(e) {} }
 // Código único: B + DDMMAA + - + N° del día + 2 caracteres al azar (evita que dos equipos que crean un bulto a la vez repitan el código)
@@ -8134,7 +8154,18 @@ function bulScan(v) {
 function bulIcono(b) { return b.estado === 'cerrado' ? '🔒' : (b.estado === 'anulado' ? '🚫' : '🟢'); }
 function bulRender() {
   const f = document.getElementById('bl-fecha').value || consecHoyKey();
-  const lista = bulAll().filter(function(b) { return b.fecha === f; }).sort(function(a, b) { return a.num - b.num || (a.id < b.id ? -1 : 1); });
+  const delDia = bulAll().filter(function(b) { return b.fecha === f; });
+  const us = document.getElementById('bl-user-sel');
+  if (us) {
+    const set = {}; delDia.forEach(function(b) { if (b.user) set[b.user] = 1; b.items.forEach(function(it) { if (it.user) set[it.user] = 1; }); });
+    const us2 = Object.keys(set).sort();
+    us.innerHTML = '<option value="*">Todos los usuarios</option>' + us2.map(function(u) { return '<option value="' + u + '">' + u + (u === consecYo() ? ' (yo)' : '') + '</option>'; }).join('');
+    if (BUL_USER !== '*' && us2.indexOf(BUL_USER) < 0) BUL_USER = '*';
+    us.value = BUL_USER;
+  }
+  const sy = document.getElementById('bl-sync');
+  if (sy) { let pend = 0; try { pend = JSON.parse(localStorage.getItem('dimerc_cambios_pend') || '[]').filter(function(x) { return /^(bulto|consec)/.test(String(x.tipo)); }).length; } catch(e) {} sy.textContent = !window._fbReady ? '🔴 Sin conexión con la base: lo que hagas se enviará solo al volver' : (pend ? '🟡 Enviando ' + pend + ' cambio(s)…' : '🟢 En línea: los bultos se actualizan solos en todos los equipos'); }
+  const lista = delDia.filter(bulDeUsuario).sort(function(a, b) { return a.num - b.num || (a.id < b.id ? -1 : 1); });
   if (BUL_SEL && !lista.some(function(b) { return b.id === BUL_SEL; })) BUL_SEL = null;
   if (!BUL_SEL && lista.length) BUL_SEL = lista[lista.length - 1].id;
   document.getElementById('bl-chips').innerHTML = lista.length ? lista.map(function(b) {
