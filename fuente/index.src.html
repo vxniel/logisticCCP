@@ -3017,6 +3017,7 @@ function nuevoProductoSave() {
         <button class="mod-back-btn" id="consec-nuevo-btn" style="margin:0" onclick="consecNuevo()">➕ Nuevo consecutivo</button>
         <button class="mod-back-btn" id="consec-selmode-btn" style="margin:0" onclick="consecToggleMulti()">☑️ Seleccionar cons.</button>
         <button class="mod-back-btn" id="consec-del-btn" style="margin:0;border-color:#f85149;color:#f85149" onclick="consecEliminar()">❌ Eliminar consecutivo</button>
+        <button class="mod-back-btn" id="consec-cb-btn" style="margin:0;border-color:#58a6ff;color:#58a6ff" onclick="consecGenerarCB()">🏷️ Generar con CB</button>
       </div>
       <div id="consec-multi-bar" style="display:none;margin-top:10px;padding:10px;border:1px solid #1f6feb;border-radius:10px;background:#0d2136">
         <div id="consec-multi-info" style="font-size:12px;color:#58a6ff;margin-bottom:8px">Toca los consecutivos que quieres incluir</div>
@@ -8107,6 +8108,27 @@ function bulDeUsuario(b) { return BUL_USER === '*' || b.user === BUL_USER || b.i
 function bulAll() { try { return JSON.parse(localStorage.getItem('dimerc_bultos') || '[]'); } catch(e) { return []; } }
 function bulSet(a) { try { localStorage.setItem('dimerc_bultos', JSON.stringify(a)); } catch(e) {} }
 // Código único: B + DDMMAA + - + N° del día + 2 caracteres al azar (evita que dos equipos que crean un bulto a la vez repitan el código)
+// Genera el código de barra (bulto) del consecutivo que se está viendo: la caja queda enlazada a ese consecutivo, con sus productos
+function consecGenerarCB() {
+  const yo = consecYo(); if (!yo) { alert('Inicia sesión.'); return; }
+  const fecha = consecSel.fecha, n = consecSel.n;
+  let b = bulAll().filter(function(x) { return x.fecha === fecha && x.consec === n && x.estado === 'cerrado'; })[0];
+  if (!b) {
+    const its = consecAll().filter(function(it) { return it.fecha === fecha && it.n === n; });
+    if (!its.length) { alert('El ' + consecNombre(fecha, n) + ' no tiene productos.'); return; }
+    if (!confirm('Generar el código de barra de ' + consecNombre(fecha, n) + ' (' + its.length + ' línea(s)). El consecutivo no se modifica. ¿Continuar?')) return;
+    const nums = bulAll().filter(function(x) { return x.fecha === fecha; }).map(function(x) { return x.num; });
+    const num = (nums.length ? Math.max.apply(null, nums) : 0) + 1; let id = bulCodigo(fecha, num); while (bulGet(id)) id = bulCodigo(fecha, num);
+    const bn = { id: id, fecha: fecha, num: num, estado: 'cerrado', consec: n, user: yo, items: its.map(function(it) { return { id: 'cc_' + it.id, cod: it.cod, desc: it.desc, cantidad: it.cantidad, ts: it.ts, _tsRaw: it._tsRaw, user: it.user }; }) };
+    const all = bulAll(); all.push(bn); bulSet(all);
+    bulEnc('—', 'Nuevo bulto', yo, 'bulto_nuevo', { bid: id, fecha: fecha, num: num });
+    bn.items.forEach(function(it) { try { window.encolarCambio(it.cod, it.desc, '—', '—', it.user, 'bulto_item', { bid: id, fecha: fecha, num: num, cid: it.id, cantidad: it.cantidad }, it._tsRaw || null); } catch(e) {} });
+    bulEnc('—', 'Bulto cerrado', yo, 'bulto_cerrar', { bid: id, n: n });
+    b = bn;
+  }
+  switchTab('barcode'); bcPanel('bulto');
+  document.getElementById('bl-fecha').value = fecha; BUL_USER = '*'; BUL_SEL = b.id; bulRender();
+}
 function bulCodigo(fecha, num) {
   const f = fecha.split('-'), A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return 'B' + f[2] + f[1] + String(f[0]).slice(2) + '-' + (num < 10 ? '0' + num : num) + A.charAt(Math.floor(Math.random() * A.length)) + A.charAt(Math.floor(Math.random() * A.length));
