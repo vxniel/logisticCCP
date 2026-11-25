@@ -3006,10 +3006,20 @@ function nuevoProductoSave() {
       <div class="mod-step-desc" style="margin:8px 0 6px">📅 Fecha</div>
       <div class="sbox"><span class="sico">📅</span><input id="consec-fecha" type="date"/></div>
       <div class="mod-step-desc" style="margin:10px 0 6px">👤 Filtrar / exportar por usuario</div>
-      <select id="consec-user-sel" style="width:100%;padding:12px;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:16px"></select>
+      <select id="consec-user-sel" style="width:100%;height:50px;line-height:normal;padding:0 12px;box-sizing:border-box;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:16px"></select>
       <div class="mod-step-desc" style="margin:10px 0 6px">Consecutivos (toca uno para verlo)</div>
       <div id="consec-chips" style="display:flex;flex-wrap:wrap"></div>
-      <button class="mod-back-btn" id="consec-nuevo-btn" style="margin-top:6px" onclick="consecNuevo()">➕ Nuevo consecutivo</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+        <button class="mod-back-btn" id="consec-nuevo-btn" style="margin:0" onclick="consecNuevo()">➕ Nuevo consecutivo</button>
+        <button class="mod-back-btn" id="consec-selmode-btn" style="margin:0" onclick="consecToggleMulti()">☑️ Seleccionar cons.</button>
+      </div>
+      <div id="consec-multi-bar" style="display:none;margin-top:10px;padding:10px;border:1px solid #1f6feb;border-radius:10px;background:#0d2136">
+        <div id="consec-multi-info" style="font-size:12px;color:#58a6ff;margin-bottom:8px">Toca los consecutivos que quieres incluir</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="mod-back-btn" style="margin:0" onclick="consecMultiTodos()">Todos</button>
+          <button class="mod-back-btn" style="margin:0;border-color:#58a6ff;color:#58a6ff" onclick="exportConsecGuiaSel()">📋 Guía de despacho de los seleccionados</button>
+        </div>
+      </div>
     </div>
 
     <div class="mod-card" id="consec-add-card">
@@ -3729,7 +3739,15 @@ function consecNuevo() {
   try { window.encolarCambio('—', 'Nuevo consecutivo', '—', '—', consecYo(), 'consec_nuevo', { fecha: consecSel.fecha, n: sig }); } catch(e) {}
   consecSel.n = sig; renderConsecList();
 }
-function consecElegir(n) { consecSel.n = n; renderConsecList(); }
+let consecMulti = { on: false, sel: {} };
+function consecElegir(n) { if (consecMulti.on) { consecMulti.sel[n] = !consecMulti.sel[n]; } else { consecSel.n = n; } renderConsecList(); }
+function consecToggleMulti() { consecMulti.on = !consecMulti.on; consecMulti.sel = {}; if (consecMulti.on) consecMulti.sel[consecSel.n] = true; renderConsecList(); }
+function consecMultiTodos() { consecNums(consecSel.fecha).forEach(function(n) { consecMulti.sel[n] = true; }); renderConsecList(); }
+function exportConsecGuiaSel() {
+  const ns = consecNums(consecSel.fecha).filter(function(n) { return consecMulti.sel[n]; });
+  if (!ns.length) { alert('Selecciona al menos un consecutivo.'); return; }
+  exportConsecGuia(ns);
+}
 function consecDeSel(it) { return it.fecha === consecSel.fecha && it.n === consecSel.n && (consecSel.user === '*' || it.user === consecSel.user); }
 function getConsecList() { return consecAll().filter(consecDeSel); }
 
@@ -3868,7 +3886,13 @@ function renderConsecList() {
   const chips = document.getElementById('consec-chips');
   const ns = consecNums(consecSel.fecha); if (!ns.length) ns.push(1);
   if (ns.indexOf(consecSel.n) < 0) consecSel.n = ns[ns.length - 1];
-  if (chips) chips.innerHTML = ns.map(function(n) { return '<button type="button" class="jaula-btn ' + (consecSel.n === n ? 'active' : '') + '" style="margin:0 6px 6px 0" onclick="consecElegir(' + n + ')">' + consecNombre(consecSel.fecha, n) + '</button>'; }).join('');
+  if (chips) chips.innerHTML = ns.map(function(n) {
+    const act = consecMulti.on ? !!consecMulti.sel[n] : consecSel.n === n;
+    return '<button type="button" class="jaula-btn ' + (act ? 'active' : '') + '" style="margin:0 6px 6px 0" onclick="consecElegir(' + n + ')">' + (consecMulti.on ? (act ? '☑ ' : '☐ ') : '') + consecNombre(consecSel.fecha, n) + '</button>';
+  }).join('');
+  const mb = document.getElementById('consec-multi-bar'); if (mb) mb.style.display = consecMulti.on ? 'block' : 'none';
+  const sb = document.getElementById('consec-selmode-btn'); if (sb) sb.textContent = consecMulti.on ? '✖ Salir de selección' : '☑️ Seleccionar cons.';
+  const mi = document.getElementById('consec-multi-info'); if (mi) { const k = Object.keys(consecMulti.sel).filter(function(x) { return consecMulti.sel[x] && ns.indexOf(Number(x)) >= 0; }).length; mi.textContent = k ? k + ' consecutivo(s) seleccionado(s)' : 'Toca los consecutivos que quieres incluir'; }
   const list = getConsecList();
   const nb = document.getElementById('consec-nuevo-btn'); if (nb) nb.style.display = hoy ? '' : 'none';
   const addCard = document.getElementById('consec-add-card'); if (addCard) addCard.style.display = hoy ? '' : 'none';
@@ -3987,10 +4011,12 @@ function guiaTipo(desc){ var n = guiaNorm(desc); for (var i = 0; i < GUIA_TIPOS.
 
 function guiaNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
 // Guía de despacho del consecutivo seleccionado (fecha + N°), todos los usuarios
-function exportConsecGuia() {
-  const fecha = consecSel.fecha, n = consecSel.n;
-  const its = consecAll().filter(function(it) { return it.fecha === fecha && it.n === n; });
-  if (!its.length) { alert('El ' + consecNombre(fecha, n) + ' no tiene productos.'); return; }
+function exportConsecGuia(nums) {
+  const fecha = consecSel.fecha, ns = (nums && nums.length) ? nums : [consecSel.n];
+  const its = consecAll().filter(function(it) { return it.fecha === fecha && ns.indexOf(it.n) >= 0; });
+  const docNombre = ns.length === 1 ? consecNombre(fecha, ns[0]) : 'Consecutivo ' + consecFmtFecha(fecha) + ' ' + ns.map(function(x) { return '(' + x + ')'; }).join(' + ');
+  const archN = ns.join('+');
+  if (!its.length) { alert('Lo seleccionado no tiene productos.'); return; }
   if (!window.jspdf) { alert('El generador de PDF aún no cargó. Revisa la conexión e intenta de nuevo.'); return; }
   const porCod = {}, orden = [], users = {};
   its.forEach(function(it) {
@@ -4027,7 +4053,7 @@ function exportConsecGuia() {
     styles: { fontSize: 8.5, cellPadding: 5, lineColor: [154, 167, 181], lineWidth: 0.5, textColor: [0, 0, 0] },
     columnStyles: { 0: { fillColor: GR, fontStyle: 'bold', cellWidth: 82, textColor: [68, 84, 106], fontSize: 7.5 }, 1: { cellWidth: 150 }, 2: { fillColor: GR, fontStyle: 'bold', cellWidth: 92, textColor: [68, 84, 106], fontSize: 7.5 } },
     body: [
-      ['FECHA', fechaTxt, 'DOCUMENTO', consecNombre(fecha, n)],
+      ['FECHA', fechaTxt, 'DOCUMENTO', docNombre],
       ['ORIGEN', 'Bodega Dimerc Concepción', 'DESTINO', ''],
       ['REGISTRADO POR', usr, 'OBSERVACIONES', '']
     ]
@@ -4096,10 +4122,10 @@ function exportConsecGuia() {
   const pc = doc.internal.getNumberOfPages();
   for (let i = 1; i <= pc; i++) {
     doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(120, 120, 120);
-    doc.text('Bodega Dimerc Concepción · Guía de despacho · ' + consecNombre(fecha, n) + ' · By: Vxniel', ML, H - 22);
+    doc.text('Bodega Dimerc Concepción · Guía de despacho · ' + docNombre + ' · By: Vxniel', ML, H - 22);
     doc.text('Página ' + i + ' de ' + pc, W - ML, H - 22, { align: 'right' });
   }
-  doc.save('Guia_Despacho_Consecutivo_' + d + '-' + m + '-' + y + '_(' + n + ').pdf');
+  doc.save('Guia_Despacho_Consecutivo_' + d + '-' + m + '-' + y + '_(' + archN + ').pdf');
 }
 
 // ── consec scanner ──
