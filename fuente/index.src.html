@@ -3012,12 +3012,14 @@ function nuevoProductoSave() {
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
         <button class="mod-back-btn" id="consec-nuevo-btn" style="margin:0" onclick="consecNuevo()">➕ Nuevo consecutivo</button>
         <button class="mod-back-btn" id="consec-selmode-btn" style="margin:0" onclick="consecToggleMulti()">☑️ Seleccionar cons.</button>
+        <button class="mod-back-btn" id="consec-del-btn" style="margin:0;border-color:#f85149;color:#f85149" onclick="consecEliminar()">❌ Eliminar consecutivo</button>
       </div>
       <div id="consec-multi-bar" style="display:none;margin-top:10px;padding:10px;border:1px solid #1f6feb;border-radius:10px;background:#0d2136">
         <div id="consec-multi-info" style="font-size:12px;color:#58a6ff;margin-bottom:8px">Toca los consecutivos que quieres incluir</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="mod-back-btn" style="margin:0" onclick="consecMultiTodos()">Todos</button>
           <button class="mod-back-btn" style="margin:0;border-color:#58a6ff;color:#58a6ff" onclick="exportConsecGuiaSel()">📋 Registro picking de los seleccionados</button>
+          <button class="mod-back-btn" style="margin:0;border-color:#f85149;color:#f85149" onclick="consecEliminarSel()">❌ Eliminar seleccionados</button>
         </div>
       </div>
     </div>
@@ -3068,7 +3070,6 @@ function nuevoProductoSave() {
         <button class="mod-back-btn" onclick="exportConsecPDF()">📄 Exportar PDF (fecha y usuario)</button>
         <button class="mod-back-btn" onclick="exportConsecGuia()" style="border-color:#58a6ff;color:#58a6ff">📋 Registro picking (consecutivo seleccionado)</button>
         <button class="mod-back-btn" onclick="consecClearList()">🗑 Limpiar este consecutivo</button>
-        <button class="mod-back-btn" onclick="consecEliminar()" style="border-color:#f85149;color:#f85149">❌ Eliminar consecutivo</button>
       </div>
     </div>
 
@@ -3938,15 +3939,23 @@ function consecRemoveItem(idx) {
 }
 
 // Eliminar un consecutivo completo (todos sus productos y su número), en todos los equipos. Pide la contraseña de la sesión.
-function consecEliminar() {
-  const yo = consecYo(), fecha = consecSel.fecha, n = consecSel.n;
+let consecDelNs = [];
+function consecEliminarSel() {
+  const ns = consecNums(consecSel.fecha).filter(function(n) { return consecMulti.sel[n]; });
+  if (!ns.length) { alert('Selecciona al menos un consecutivo.'); return; }
+  consecEliminar(ns);
+}
+function consecEliminar(nums) {
+  const yo = consecYo(), fecha = consecSel.fecha, ns = (nums && nums.length) ? nums : [consecSel.n];
+  consecDelNs = ns;
   if (!USUARIOS_COMPLETOS.includes(yo)) { alert('Solo los usuarios autorizados pueden eliminar un consecutivo.'); return; }
-  const cant = consecAll().filter(function(it) { return it.fecha === fecha && it.n === n; }).length;
+  const cant = consecAll().filter(function(it) { return it.fecha === fecha && ns.indexOf(it.n) >= 0; }).length;
+  const nombreDel = ns.length === 1 ? consecNombre(fecha, ns[0]) : ns.length + ' consecutivos (' + ns.map(function(x) { return '(' + x + ')'; }).join(', ') + ')';
   let box = document.getElementById('consec-del-modal'); if (box) box.remove();
   box = document.createElement('div'); box.id = 'consec-del-modal';
   box.style.cssText = 'position:fixed;left:0;right:0;top:0;bottom:0;z-index:99998;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:14px';
   box.innerHTML = '<div style="background:#0d1117;border:2px solid #f85149;border-radius:14px;padding:16px;max-width:420px;width:100%">'
-    + '<div style="font-size:16px;font-weight:800;color:#f85149;margin-bottom:6px">❌ Eliminar ' + consecNombre(fecha, n) + '</div>'
+    + '<div style="font-size:16px;font-weight:800;color:#f85149;margin-bottom:6px">❌ Eliminar ' + nombreDel + '</div>'
     + '<div style="font-size:13px;color:#c9d1d9;margin-bottom:10px">Se borrarán sus ' + cant + ' línea(s) en todos los equipos. No se puede deshacer. Ingresa tu contraseña para confirmar.</div>'
     + '<input id="consec-del-pass" type="password" autocomplete="off" placeholder="Contraseña" style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #30363d;background:#161b22;color:#e6edf3;font-size:16px">'
     + '<div id="consec-del-err" style="color:#f85149;font-size:12px;min-height:16px;margin:6px 0"></div>'
@@ -3956,14 +3965,15 @@ function consecEliminar() {
   try { document.getElementById('consec-del-pass').focus(); } catch(e) {}
 }
 function consecEliminarOk() {
-  const yo = consecYo(), fecha = consecSel.fecha, n = consecSel.n;
+  const yo = consecYo(), fecha = consecSel.fecha, ns = consecDelNs.slice();
   const inp = document.getElementById('consec-del-pass'), err = document.getElementById('consec-del-err');
   const clave = (typeof USERS !== 'undefined' && USERS[yo]) || null;
   if (!clave || !inp || inp.value !== String(clave)) { if (err) err.textContent = 'Contraseña incorrecta.'; if (inp) { inp.value = ''; inp.focus(); } return; }
-  const ev = { fecha: fecha, n: n };
   const r = document.getElementById('consec-del-modal'); if (r) r.remove();
-  consecAplicarCambio({ tipo: 'consec_borrar', fecha: fecha, n: n });
-  try { window.encolarCambio('—', 'Consecutivo eliminado', '—', '—', yo, 'consec_borrar', ev); } catch(e) {}
+  ns.forEach(function(n) {
+    consecAplicarCambio({ tipo: 'consec_borrar', fecha: fecha, n: n });
+    try { window.encolarCambio('—', 'Consecutivo eliminado', '—', '—', yo, 'consec_borrar', { fecha: fecha, n: n }); } catch(e) {}
+  });
   consecUltimo(); consecMulti.sel = {};
   renderConsecList();
 }
