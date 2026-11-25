@@ -4018,9 +4018,8 @@ function exportConsecGuia(nums) {
   const archN = ns.join('+');
   if (!its.length) { alert('Lo seleccionado no tiene productos.'); return; }
   if (!window.jspdf) { alert('El generador de PDF aún no cargó. Revisa la conexión e intenta de nuevo.'); return; }
-  const porCod = {}, orden = [], users = {};
+  const porCod = {}, orden = [];
   its.forEach(function(it) {
-    users[it.user || '—'] = 1;
     let g = porCod[it.cod];
     if (!g) { g = porCod[it.cod] = { cod: it.cod, desc: it.desc || '', cant: 0 }; orden.push(g); }
     if (!g.desc && it.desc) g.desc = it.desc;
@@ -4047,7 +4046,6 @@ function exportConsecGuia(nums) {
   doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('BODEGA DIMERC CONCEPCIÓN', ML + 10, 60);
   doc.setFontSize(13); doc.text('GUÍA DE DESPACHO', ML + CW - 10, 60, { align: 'right' });
   doc.setTextColor(0, 0, 0);
-  const usr = Object.keys(users).sort().join(', ');
   doc.autoTable({
     startY: 82, theme: 'grid', margin: { left: ML, right: ML },
     styles: { fontSize: 8.5, cellPadding: 5, lineColor: [154, 167, 181], lineWidth: 0.5, textColor: [0, 0, 0] },
@@ -4055,7 +4053,7 @@ function exportConsecGuia(nums) {
     body: [
       ['FECHA', fechaTxt, 'DOCUMENTO', docNombre],
       ['ORIGEN', 'Bodega Dimerc Concepción', 'DESTINO', ''],
-      ['REGISTRADO POR', usr, 'OBSERVACIONES', '']
+      ['OBSERVACIONES', { content: '', colSpan: 3 }]
     ]
   });
   let yy = doc.lastAutoTable.finalY + 14;
