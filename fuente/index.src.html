@@ -8845,6 +8845,7 @@ function impSet(a) { try { localStorage.setItem(IMP_KEY, JSON.stringify(a)); } c
 function impGet(id) { return impAll().filter(function(x) { return x.id === id; })[0] || null; }
 function impDef() { const a = impAll(), id = localStorage.getItem(IMP_DEFK); return a.filter(function(x) { return x.id === id; })[0] || a[0] || null; }
 let IMP_USB = {};
+const IMP_VIDS = [0x0A5F, 0x067E, 0x0C2E, 0x0AA7];   // Zebra, Intermec/Honeywell
 function impMsg(t, ok) { const el = document.getElementById('imp-msg'); if (el) { el.style.color = ok === false ? '#f85149' : (ok ? '#3fb950' : '#8b949e'); el.textContent = t; } if (ok !== undefined) { try { (window.showToast || function() {})((ok ? '🖨️ ' : '⚠️ ') + t); } catch(e) {} } }
 function impXhr(method, url, body, cb, ms) {
   let x; try { x = new XMLHttpRequest(); x.open(method, url, true); x.timeout = ms || 5000; } catch(e) { cb(false, '', 0); return; }
@@ -8874,7 +8875,7 @@ function impAgregarIP() {
 }
 function impConectarUSB() {
   if (!navigator.usb) { impMsg('Este navegador no permite USB directo (WebUSB). Usa Chrome en PC/Android reciente, o Browser Print.', false); return; }
-  navigator.usb.requestDevice({ filters: [{ vendorId: 0x0A5F }] }).then(function(d) {
+  navigator.usb.requestDevice({ filters: IMP_VIDS.map(function(v) { return { vendorId: v }; }) }).then(function(d) {
     const id = 'usb:' + (d.serialNumber || (d.vendorId + '-' + d.productId)), all = impAll(), o = { id: id, tipo: 'usb', nombre: d.productName || 'Zebra USB', serie: d.serialNumber || '', vid: d.vendorId, pid: d.productId };
     const k = all.findIndex(function(x) { return x.id === id; }); if (k >= 0) all[k] = o; else all.push(o); impSet(all); IMP_USB[id] = d;
     if (!localStorage.getItem(IMP_DEFK)) localStorage.setItem(IMP_DEFK, id); impMsg('USB conectada: ' + o.nombre, true); impRender();
@@ -8897,13 +8898,14 @@ function impEnviar(zpl, p, cb) {
     impXhr('POST', p.base + '/write', JSON.stringify({ device: p.dev, data: zpl }), function(ok) { cb(ok, ok ? 'Enviado a ' + p.nombre : 'Browser Print no respondió. ¿Está abierto en el PC?'); }, 8000);
   } else if (p.tipo === 'red') {
     const mixto = location.protocol === 'https:';
+    impXhr('POST', IMP_BP[1] + '/write', JSON.stringify({ device: { name: 'Red ' + p.ip, ip: p.ip }, data: zpl }), function(okp) { if (okp) { cb(true, 'Enviado a ' + p.nombre + ' (por el puente del PC)'); return; }
     impXhr('POST', 'http://' + p.ip + '/pstprnt', zpl, function(ok, txt, ms) {
       // el navegador no deja leer la respuesta de otro origen: un "error" rápido suele ser bloqueo, uno lento es equipo inalcanzable
       if (ok) cb(true, 'Enviado a ' + p.nombre);
       else if (mixto && ms < 60) cb(false, 'El navegador bloqueó el envío (página https → impresora http). En Chrome: candado › Configuración del sitio › "Contenido no seguro" › Permitir, y reintenta.');
       else if (ms >= 4900) cb(false, 'No hay respuesta de ' + p.ip + '. Revisa que esté encendida y en la misma red.');
       else cb(true, 'Enviado a ' + p.nombre + ' (sin confirmación del navegador; si no sale, revisa IP/bloqueo de contenido no seguro)');
-    }, 5000);
+    }, 5000); }, 4000);
   } else if (p.tipo === 'usb') {
     if (!navigator.usb) { cb(false, 'USB no disponible en este navegador'); return; }
     impUsbAbrir(p, function(e, d, ep) { if (e) { cb(false, 'USB: ' + (e.message || e)); return; } d.transferOut(ep, new TextEncoder().encode(zpl)).then(function() { cb(true, 'Enviado por USB a ' + p.nombre); }).catch(function(er) { cb(false, 'USB: ' + er.message); }); });
@@ -8923,9 +8925,9 @@ function impAuto(sil, fin) {
   if (IMP_AUTO_EN) { if (fin) fin(); return; } IMP_AUTO_EN = true; let pend = 2, nuevos = 0;
   const listo = function() { if (--pend > 0) return; IMP_AUTO_EN = false; impRender(); impMsg(impAll().length ? 'Conexión automática lista: ' + impAll().length + ' impresora(s). Predeterminada: ' + (impDef() ? impDef().nombre : '—') : 'No encontré impresoras. Enciende la Zebra, enchufa el USB o abre Browser Print.', sil ? undefined : (impAll().length ? true : false)); if (sil) { try { /* silencioso: sin aviso emergente */ } catch(e) {} } if (fin) fin(); };
   impBuscarBP(0, true, function() { listo(); });
-  if (navigator.usb && navigator.usb.getDevices) navigator.usb.getDevices().then(function(l) { l.filter(function(d) { return d.vendorId === 0x0A5F; }).forEach(function(d) { if (impUsbAgregar(d)) nuevos++; }); listo(); }).catch(function() { listo(); }); else listo();
+  if (navigator.usb && navigator.usb.getDevices) navigator.usb.getDevices().then(function(l) { l.filter(function(d) { return IMP_VIDS.indexOf(d.vendorId) >= 0; }).forEach(function(d) { if (impUsbAgregar(d)) nuevos++; }); listo(); }).catch(function() { listo(); }); else listo();
 }
-try { if (navigator.usb && navigator.usb.addEventListener) { navigator.usb.addEventListener('connect', function(e) { if (impAutoOn() && e.device && e.device.vendorId === 0x0A5F) { impUsbAgregar(e.device); impRender(); try { (window.showToast || function() {})('🔌 Zebra USB detectada: ' + (e.device.productName || 'Zebra')); } catch(x) {} } }); } } catch(e) {}
+try { if (navigator.usb && navigator.usb.addEventListener) { navigator.usb.addEventListener('connect', function(e) { if (impAutoOn() && e.device && IMP_VIDS.indexOf(e.device.vendorId) >= 0) { impUsbAgregar(e.device); impRender(); try { (window.showToast || function() {})('🔌 Zebra USB detectada: ' + (e.device.productName || 'Zebra')); } catch(x) {} } }); } } catch(e) {}
 setTimeout(function() { if (impAutoOn() && window._loggedUser) impAuto(true); }, 6000);
 function impProbar(id) {
   const p = impGet(id); if (!p) return; const w = BL_TAMS[blTam()][0] * 8, h = BL_TAMS[blTam()][1] * 8;
@@ -8972,7 +8974,8 @@ function impRender() {
     + '<div style="display:flex;gap:6px;margin-bottom:6px"><input id="imp-ip" type="text" inputmode="decimal" placeholder="IP de la Zebra (192.168.1.50)" autocomplete="off" style="' + inp + ';flex:1"/><input id="imp-nom" type="text" placeholder="Nombre (opcional)" autocomplete="off" style="' + inp + ';flex:1"/></div>'
     + '<button type="button" class="mod-back-btn" style="margin:0;width:100%" onclick="impAgregarIP()">🌐 Agregar impresora de red por IP</button>'
     + '<div id="imp-msg" style="font-size:12px;margin-top:10px;min-height:16px;color:' + (colOld || '#8b949e') + '">' + E(msgOld) + '</div>'
-    + '<div style="font-size:11px;color:#6e7681;margin-top:10px;line-height:1.5">• <b>Browser Print</b>: instala Zebra Browser Print en el PC con la Zebra (USB o red), déjalo abierto y pulsa Buscar. Es la forma más estable.<br>• <b>Red por IP</b>: Zebra Link-OS (ZD/ZT) en la misma red. Chrome puede pedir permitir "contenido no seguro" para este sitio.<br>• <b>USB</b>: Chrome en PC/Android reciente.<br>• Si nada de esto aplica, usa 🖨️ Imprimir etiqueta o ⬇️ Descargar ZPL.</div>'
+    + '<div style="font-size:11px;color:#6e7681;margin-top:10px;line-height:1.5">• <b>Honeywell PM45 / cualquier impresora del PC</b>: descarga e instala el puente (abajo), pulsa Buscar y elige la impresora. Necesita que la impresora esté instalada en Windows y en modo ZPL (ZSim).<br>• <b>Zebra Browser Print</b>: alternativa para Zebra; déjalo abierto y pulsa Buscar.<br>• <b>Red por IP</b>: Zebra Link-OS (ZD/ZT) en la misma red. Chrome puede pedir permitir "contenido no seguro" para este sitio.<br>• <b>USB</b>: Chrome en PC/Android reciente.<br>• Si nada de esto aplica, usa 🖨️ Imprimir etiqueta o ⬇️ Descargar ZPL.</div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><a class="mod-back-btn" style="margin:0;flex:1;text-align:center;text-decoration:none;padding:9px 8px" href="puente/Instalar_Puente.bat" download>⬇️ Instalador del puente (.bat)</a><a class="mod-back-btn" style="margin:0;flex:1;text-align:center;text-decoration:none;padding:9px 8px" href="puente/Puente_Impresion_Dimerc.ps1" download>⬇️ Puente (.ps1)</a></div>'
     + '<button type="button" class="mod-back-btn" style="margin-top:12px;width:100%" onclick="document.getElementById(\'imp-modal\').remove()">Cerrar</button></div>';
 }
 function blImprimir() {
