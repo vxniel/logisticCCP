@@ -1977,6 +1977,7 @@ function switchTab(tab) {
 
   closeAllNavDropdowns();
 
+  try { fechasAHoy(tab); } catch(e) {}
   if(tab==='modif') renderModHistory();
   if(tab==='consec') renderConsecList();
   if(tab==='vcto') { renderVctoHistory(); renderVctoAllCount(); renderElabCount(); }
@@ -3854,6 +3855,31 @@ function sincPestanas() {
   _spBusy = false;
 }
 function sincPestanasProg() { if (_spBusy) return; clearTimeout(window._spT); window._spT = setTimeout(sincPestanas, 60); }
+// ---- La app siempre arranca en la fecha actual: al entrar a cada pestaña con selector de fecha y al cambiar el día ----
+const FECHA_INPUTS = { consec: ['consec-fecha'], barcode: ['bl-fecha', 'ver-fecha'], consolidado: ['consol-date-select'], creapallets: ['cp-date-select'], conteointerno: ['ci-date-select'], indic: ['indic-date-select', 'indic-totales-date-select'], turno: ['turno-date-select'] };
+function fechasAHoy(tab) {
+  const hoy = consecHoyKey();
+  (FECHA_INPUTS[tab] || []).forEach(function(id) { const e = document.getElementById(id); if (e) e.value = hoy; });
+  if (tab === 'consec') { consecSel.fecha = hoy; consecSel.user = '*'; consecMulti.on = false; consecMulti.sel = {}; consecUltimo(); }
+  if (tab === 'barcode') { BUL_USER = '*'; }
+}
+let _hoyPrev = null;
+function revisarCambioDeDia() {
+  let hoy; try { hoy = consecHoyKey(); } catch(e) { return; }
+  if (_hoyPrev === null) { _hoyPrev = hoy; return; }
+  if (hoy === _hoyPrev) return;
+  const ant = _hoyPrev; _hoyPrev = hoy;   // solo se mueven los que estaban en el día anterior (si elegiste otra fecha a propósito, se respeta)
+  Object.keys(FECHA_INPUTS).forEach(function(tab) { FECHA_INPUTS[tab].forEach(function(id) {
+    const e = document.getElementById(id);
+    if (e && e.value === ant) { e.value = hoy; try { if (e.offsetParent !== null) e.dispatchEvent(new Event('change')); } catch(x) {} }
+  }); });
+  if (consecSel.fecha === ant) { consecSel.fecha = hoy; consecUltimo(); }
+  try { sincPestanas(); } catch(e) {}
+  try { (window.showToast || function() {})('📅 Cambió el día: ahora es ' + consecFmtFecha(hoy)); } catch(e) {}
+}
+setTimeout(revisarCambioDeDia, 2000); setInterval(revisarCambioDeDia, 20000);
+document.addEventListener('visibilitychange', function() { if (!document.hidden) revisarCambioDeDia(); });
+window.addEventListener('focus', function() { revisarCambioDeDia(); });
 
 function consecMeta() { try { return JSON.parse(localStorage.getItem('dimerc_consec_meta') || '{}'); } catch(e) { return {}; } }
 function consecMetaSet(m) { localStorage.setItem('dimerc_consec_meta', JSON.stringify(m)); }
