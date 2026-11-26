@@ -3586,6 +3586,7 @@ function nuevoProductoSave() {
           <div class="sbox" style="width:110px;margin:0"><span class="sico">#</span><input id="bl-lote-n" type="number" min="1" max="200" value="10" inputmode="numeric" onkeydown="if(event.keyCode===13){bulGenerarLote();}"/></div>
           <button class="mod-back-btn" style="margin:0;flex:1" onclick="bulGenerarLote()">🏷️ Sacar etiquetas nuevas (sin productos)</button>
         </div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button id="imp-atajo" type="button" class="mod-back-btn" style="margin:0;flex:1" onclick="impAtajo()">🖨️ Conectar Zebra</button><button type="button" class="mod-back-btn" style="margin:0;width:46px" title="Impresoras" onclick="impAbrir()">⚙️</button></div>
       </div>
       <div class="mod-card">
         <div class="mod-step-desc" style="margin-bottom:6px">📅 Fecha</div>
@@ -8951,6 +8952,9 @@ function impAbrir() {
   let m = document.getElementById('imp-modal'); if (!m) { m = document.createElement('div'); m.id = 'imp-modal'; m.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:99998;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:14px'; m.onclick = function(e) { if (e.target === m) m.remove(); }; document.body.appendChild(m); }
   impRender();
 }
+function impAtajoEstado() { const b = document.getElementById('imp-atajo'); if (!b) return; const d = impDef(); b.textContent = d ? '🖨️ ' + d.nombre + ' ✔' : '🖨️ Conectar Zebra'; b.style.borderColor = d ? '#3fb950' : ''; b.style.color = d ? '#3fb950' : ''; }
+function impAtajo() { const b = document.getElementById('imp-atajo'); if (b) b.textContent = '🔄 Buscando…'; impAuto(false, function() { impAtajoEstado(); const d = impDef(); try { (window.showToast || function() {})(d ? '🖨️ Conectada: ' + d.nombre : '⚠️ No encontré Zebra. Toca ⚙️ para agregarla a mano.'); } catch(e) {} }); }
+setInterval(impAtajoEstado, 3000);
 function impRender() {
   const m = document.getElementById('imp-modal'); if (!m) return; const E = trasEsc, d = impDef(), all = impAll();
   const msgOld = document.getElementById('imp-msg') ? document.getElementById('imp-msg').textContent : '', colOld = document.getElementById('imp-msg') ? document.getElementById('imp-msg').style.color : '';
