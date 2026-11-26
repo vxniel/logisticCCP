@@ -722,7 +722,7 @@ body.locked #section-produccion{display:none!important}
 <div class="watermark">by <span>Vxniel</span></div>
 
 <div id="fb-toast"></div>
-<div id="tools-menu" role="menu"><button type="button" onclick="abrirHerramienta('calc')">🧮 Calculadora</button><button type="button" onclick="abrirHerramienta('voz')">🎙️ Asistente virtual</button><button type="button" onclick="abrirHerramienta('full')">⛶ Pantalla completa</button></div>
+<div id="tools-menu" role="menu"><button type="button" onclick="abrirHerramienta('calc')">🧮 Calculadora</button><button type="button" onclick="abrirHerramienta('voz')">🎙️ Asistente virtual</button><button type="button" onclick="abrirHerramienta('imp')">🖨️ Impresoras</button><button type="button" onclick="abrirHerramienta('full')">⛶ Pantalla completa</button></div>
 <div id="cat-modal" onclick="if(event.target===this)cerrarFotoCatalogo()"><div id="cat-box"></div></div>
 
 <div id="calc-modal" onclick="if(event.target===this)toggleCalculadora()">
@@ -3619,7 +3619,8 @@ function nuevoProductoSave() {
           <option value="60x40">60 × 40 mm</option>
         </select>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          <button class="mod-back-btn" onclick="blImprimir()">🖨️ Imprimir etiqueta</button>
+          <button class="mod-confirm-btn" style="margin:0;width:auto;padding:0 14px" onclick="blImpZebra()">🖨️ Imprimir en Zebra</button>
+          <button class="mod-back-btn" onclick="blImprimir()">🖨️ Imprimir (diálogo)</button>
           <button class="mod-back-btn" onclick="blDescargarZPL()">⬇️ Descargar ZPL (Zebra)</button>
           <button class="mod-back-btn" onclick="blCopiarZPL()">📋 Copiar ZPL</button>
           <button class="mod-back-btn" onclick="bcDescargarPNG('bl-svg','bl-preview-label',BUL_SEL)">📥 PNG</button>
@@ -6642,6 +6643,7 @@ function abrirHerramienta(que) {
   if (que === 'calc') toggleCalculadora();
   else if (que === 'voz' && window.vozAsistente) window.vozAsistente.abrir();
   else if (que === 'full') pantallaCompleta();
+  else if (que === 'imp') impAbrir();
 }
 function pantallaCompleta() {
   try {
@@ -8835,6 +8837,114 @@ function blHtmlEtiqueta(b, tam) {
     + (dt.destino ? '<div class="i">' + trasEsc(dt.destino) + '</div>' : '') + (!peq ? '<div class="i">' + dt.fecha + (dt.art ? ' · ' + dt.art + ' art. · ' + dt.uni + ' uni.' : '') + '</div>' : '')
     + '</div></body></html>';
 }
+// ===== IMPRESORAS (Herramientas): Zebra por Browser Print (PC), red local (IP) o USB. Se guarda por equipo. =====
+const IMP_KEY = 'dimerc_impresoras', IMP_DEFK = 'dimerc_impresora_def';
+function impAll() { try { return JSON.parse(localStorage.getItem(IMP_KEY) || '[]'); } catch(e) { return []; } }
+function impSet(a) { try { localStorage.setItem(IMP_KEY, JSON.stringify(a)); } catch(e) {} }
+function impGet(id) { return impAll().filter(function(x) { return x.id === id; })[0] || null; }
+function impDef() { const a = impAll(), id = localStorage.getItem(IMP_DEFK); return a.filter(function(x) { return x.id === id; })[0] || a[0] || null; }
+let IMP_USB = {};
+function impMsg(t, ok) { const el = document.getElementById('imp-msg'); if (el) { el.style.color = ok === false ? '#f85149' : (ok ? '#3fb950' : '#8b949e'); el.textContent = t; } if (ok !== undefined) { try { (window.showToast || function() {})((ok ? '🖨️ ' : '⚠️ ') + t); } catch(e) {} } }
+function impXhr(method, url, body, cb, ms) {
+  let x; try { x = new XMLHttpRequest(); x.open(method, url, true); x.timeout = ms || 5000; } catch(e) { cb(false, '', 0); return; }
+  const t0 = Date.now(); x.onload = function() { cb(x.status >= 200 && x.status < 300, x.responseText, Date.now() - t0); };
+  x.onerror = x.ontimeout = function() { cb(false, '', Date.now() - t0); };
+  try { x.send(body || null); } catch(e) { cb(false, '', 0); }
+}
+const IMP_BP = ['https://localhost:9101', 'http://localhost:9100', 'https://127.0.0.1:9101', 'http://127.0.0.1:9100'];
+function impBuscarBP(i) {
+  i = i || 0; if (i >= IMP_BP.length) { impMsg('No encontré Zebra Browser Print. Instálalo en este PC (zebra.com › Browser Print), déjalo abierto y vuelve a buscar. Si usas https, abre una vez https://localhost:9101/ptest y acepta el certificado.', false); return; }
+  if (i === 0) impMsg('Buscando impresoras Zebra…');
+  impXhr('GET', IMP_BP[i] + '/available', null, function(ok, txt) {
+    if (!ok) { impBuscarBP(i + 1); return; }
+    let lst = []; try { const j = JSON.parse(txt); lst = (j.printer || j.printers || []).filter(function(d) { return d && d.uid; }); } catch(e) {}
+    if (!lst.length) { impMsg('Browser Print está activo pero no ve impresoras. Revisa que la Zebra esté instalada/encendida en ese PC.', false); return; }
+    const all = impAll(); lst.forEach(function(d) { const id = 'bp:' + d.uid, o = { id: id, tipo: 'bp', nombre: d.name || d.uid, base: IMP_BP[i], dev: d }, k = all.findIndex(function(x) { return x.id === id; }); if (k >= 0) all[k] = o; else all.push(o); });
+    impSet(all); if (!localStorage.getItem(IMP_DEFK)) localStorage.setItem(IMP_DEFK, 'bp:' + lst[0].uid);
+    impMsg(lst.length + ' impresora(s) encontradas y guardadas.', true); impRender();
+  }, 3500);
+}
+function impAgregarIP() {
+  let ip = String(document.getElementById('imp-ip').value || '').trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, ''), nom = String(document.getElementById('imp-nom').value || '').trim();
+  if (!/^[A-Za-z0-9.\-]+(:\d+)?$/.test(ip)) { impMsg('Escribe una IP válida, por ejemplo 192.168.1.50', false); return; }
+  const all = impAll(), id = 'red:' + ip; if (all.some(function(x) { return x.id === id; })) { impMsg('Esa IP ya está guardada.', false); return; }
+  all.push({ id: id, tipo: 'red', nombre: nom || ('Zebra ' + ip), ip: ip }); impSet(all); if (!localStorage.getItem(IMP_DEFK)) localStorage.setItem(IMP_DEFK, id);
+  document.getElementById('imp-ip').value = ''; document.getElementById('imp-nom').value = ''; impMsg('Impresora de red guardada. Pulsa 🧪 Probar.', true); impRender();
+}
+function impConectarUSB() {
+  if (!navigator.usb) { impMsg('Este navegador no permite USB directo (WebUSB). Usa Chrome en PC/Android reciente, o Browser Print.', false); return; }
+  navigator.usb.requestDevice({ filters: [{ vendorId: 0x0A5F }] }).then(function(d) {
+    const id = 'usb:' + (d.serialNumber || (d.vendorId + '-' + d.productId)), all = impAll(), o = { id: id, tipo: 'usb', nombre: d.productName || 'Zebra USB', serie: d.serialNumber || '', vid: d.vendorId, pid: d.productId };
+    const k = all.findIndex(function(x) { return x.id === id; }); if (k >= 0) all[k] = o; else all.push(o); impSet(all); IMP_USB[id] = d;
+    if (!localStorage.getItem(IMP_DEFK)) localStorage.setItem(IMP_DEFK, id); impMsg('USB conectada: ' + o.nombre, true); impRender();
+  }).catch(function(e) { impMsg('USB no conectada: ' + (e && e.message ? e.message : e), false); });
+}
+function impUsbAbrir(p, cb) {
+  const usar = function(d) {
+    d.open().then(function() { return d.configuration ? null : d.selectConfiguration(1); }).then(function() {
+      let ifc = null, ep = null; d.configuration.interfaces.forEach(function(i) { i.alternates.forEach(function(a) { a.endpoints.forEach(function(e) { if (!ep && e.direction === 'out' && e.type === 'bulk') { ifc = i.interfaceNumber; ep = e.endpointNumber; } }); }); });
+      if (ep === null) throw new Error('la impresora no expone salida USB'); return d.claimInterface(ifc).then(function() { cb(null, d, ep); });
+    }).catch(function(e) { cb(e); });
+  };
+  if (IMP_USB[p.id]) { usar(IMP_USB[p.id]); return; }
+  navigator.usb.getDevices().then(function(l) { const d = l.filter(function(x) { return (p.serie && x.serialNumber === p.serie) || (!p.serie && x.productId === p.pid); })[0]; if (!d) { cb(new Error('vuelve a pulsar "Conectar USB" (el navegador pide permiso otra vez)')); return; } IMP_USB[p.id] = d; usar(d); }).catch(cb);
+}
+// Envía ZPL a la impresora p. cb(ok, mensaje)
+function impEnviar(zpl, p, cb) {
+  cb = cb || function() {};
+  if (p.tipo === 'bp') {
+    impXhr('POST', p.base + '/write', JSON.stringify({ device: p.dev, data: zpl }), function(ok) { cb(ok, ok ? 'Enviado a ' + p.nombre : 'Browser Print no respondió. ¿Está abierto en el PC?'); }, 8000);
+  } else if (p.tipo === 'red') {
+    const mixto = location.protocol === 'https:';
+    impXhr('POST', 'http://' + p.ip + '/pstprnt', zpl, function(ok, txt, ms) {
+      // el navegador no deja leer la respuesta de otro origen: un "error" rápido suele ser bloqueo, uno lento es equipo inalcanzable
+      if (ok) cb(true, 'Enviado a ' + p.nombre);
+      else if (mixto && ms < 60) cb(false, 'El navegador bloqueó el envío (página https → impresora http). En Chrome: candado › Configuración del sitio › "Contenido no seguro" › Permitir, y reintenta.');
+      else if (ms >= 4900) cb(false, 'No hay respuesta de ' + p.ip + '. Revisa que esté encendida y en la misma red.');
+      else cb(true, 'Enviado a ' + p.nombre + ' (sin confirmación del navegador; si no sale, revisa IP/bloqueo de contenido no seguro)');
+    }, 5000);
+  } else if (p.tipo === 'usb') {
+    if (!navigator.usb) { cb(false, 'USB no disponible en este navegador'); return; }
+    impUsbAbrir(p, function(e, d, ep) { if (e) { cb(false, 'USB: ' + (e.message || e)); return; } d.transferOut(ep, new TextEncoder().encode(zpl)).then(function() { cb(true, 'Enviado por USB a ' + p.nombre); }).catch(function(er) { cb(false, 'USB: ' + er.message); }); });
+  } else cb(false, 'Tipo de impresora desconocido');
+}
+function impProbar(id) {
+  const p = impGet(id); if (!p) return; const w = BL_TAMS[blTam()][0] * 8, h = BL_TAMS[blTam()][1] * 8;
+  const z = '^XA\n^CI28\n^PW' + w + '\n^LL' + h + '\n^FO20,30^A0N,40,40^FDPRUEBA DIMERC CCP^FS\n^FO20,90^A0N,28,28^FD' + new Date().toLocaleString('es-CL') + '^FS\n^BY2,3,80^FO20,140^BCN,80,Y,N,N^FDTEST-001^FS\n^XZ\n';
+  impMsg('Enviando prueba a ' + p.nombre + '…'); impEnviar(z, p, function(ok, m) { impMsg(m, ok); });
+}
+function impElegir(id) { localStorage.setItem(IMP_DEFK, id); impRender(); }
+function impQuitar(id) { if (!confirm('¿Quitar esta impresora de este equipo?')) return; impSet(impAll().filter(function(x) { return x.id !== id; })); delete IMP_USB[id]; if (localStorage.getItem(IMP_DEFK) === id) localStorage.removeItem(IMP_DEFK); impRender(); }
+// Imprime directo en la impresora predeterminada; si no hay ninguna, abre el panel para configurarla
+function impImprimirZPL(zpl, que) {
+  const p = impDef(); if (!p) { impAbrir(); impMsg('Primero agrega y elige una impresora.', false); return; }
+  try { (window.showToast || function() {})('🖨️ Enviando ' + (que || 'etiqueta') + ' a ' + p.nombre + '…'); } catch(e) {}
+  impEnviar(zpl, p, function(ok, m) { try { (window.showToast || function() {})((ok ? '🖨️ ' : '⚠️ ') + m); } catch(e) {} if (!ok) alert(m); });
+}
+function blImpZebra() { const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b) { alert('Primero selecciona un bulto.'); return; } impImprimirZPL(blZPL(b, blTam()), 'etiqueta ' + b.id); }
+function bulLoteImpZebra() { const bs = bulLoteBultos(); if (!bs.length) return; const tam = blTam(); impImprimirZPL(bs.map(function(b) { return blZPL(b, tam); }).join('\n'), bs.length + ' etiquetas'); }
+function impAbrir() {
+  let m = document.getElementById('imp-modal'); if (!m) { m = document.createElement('div'); m.id = 'imp-modal'; m.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:99998;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:14px'; m.onclick = function(e) { if (e.target === m) m.remove(); }; document.body.appendChild(m); }
+  impRender();
+}
+function impRender() {
+  const m = document.getElementById('imp-modal'); if (!m) return; const E = trasEsc, d = impDef(), all = impAll();
+  const msgOld = document.getElementById('imp-msg') ? document.getElementById('imp-msg').textContent : '', colOld = document.getElementById('imp-msg') ? document.getElementById('imp-msg').style.color : '';
+  const TIPO = { bp: 'Browser Print', red: 'Red local', usb: 'USB' };
+  const inp = 'width:100%;height:42px;padding:0 12px;box-sizing:border-box;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:14px';
+  m.innerHTML = '<div style="background:#161b22;border:1px solid #30363d;border-radius:14px;padding:16px;max-width:460px;width:100%;max-height:92vh;overflow:auto">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:16px;font-weight:800;color:#e6edf3">🖨️ Impresoras</div><button type="button" onclick="document.getElementById(\'imp-modal\').remove()" style="background:none;border:none;color:#7d8590;font-size:22px;cursor:pointer">✕</button></div>'
+    + '<div style="font-size:12px;color:#8b949e;margin:4px 0 10px">Conecta la Zebra para imprimir las etiquetas de bulto directo desde la app (ZPL). Se guarda en este equipo.</div>'
+    + (all.length ? all.map(function(p) { const sel = d && d.id === p.id; return '<div style="border:1px solid ' + (sel ? '#3fb950' : '#30363d') + ';border-radius:10px;padding:8px 10px;margin-bottom:6px"><div style="display:flex;justify-content:space-between;gap:6px;align-items:center"><div onclick="impElegir(\'' + p.id + '\')" style="cursor:pointer;flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:#e6edf3">' + (sel ? '● ' : '○ ') + E(p.nombre) + '</div><div style="font-size:11px;color:#8b949e">' + TIPO[p.tipo] + (p.ip ? ' · ' + E(p.ip) : '') + (sel ? ' · predeterminada' : '') + '</div></div><button type="button" class="mod-back-btn" style="margin:0;padding:6px 10px" onclick="impProbar(\'' + p.id + '\')">🧪 Probar</button><button type="button" class="xbtn2" style="display:inline-block" onclick="impQuitar(\'' + p.id + '\')">✕</button></div></div>'; }).join('') : '<div style="font-size:13px;color:#d29922;margin-bottom:8px">Aún no hay impresoras guardadas.</div>')
+    + '<div style="font-size:12px;color:#8b949e;margin:10px 0 6px;font-weight:700">AGREGAR</div>'
+    + '<button type="button" class="mod-confirm-btn" style="margin:0 0 8px" onclick="impBuscarBP()">🔍 Buscar Zebra (Browser Print en el PC)</button>'
+    + '<button type="button" class="mod-back-btn" style="margin:0 0 8px;width:100%" onclick="impConectarUSB()">🔌 Conectar Zebra por USB</button>'
+    + '<div style="display:flex;gap:6px;margin-bottom:6px"><input id="imp-ip" type="text" inputmode="decimal" placeholder="IP de la Zebra (192.168.1.50)" autocomplete="off" style="' + inp + ';flex:1"/><input id="imp-nom" type="text" placeholder="Nombre (opcional)" autocomplete="off" style="' + inp + ';flex:1"/></div>'
+    + '<button type="button" class="mod-back-btn" style="margin:0;width:100%" onclick="impAgregarIP()">🌐 Agregar impresora de red por IP</button>'
+    + '<div id="imp-msg" style="font-size:12px;margin-top:10px;min-height:16px;color:' + (colOld || '#8b949e') + '">' + E(msgOld) + '</div>'
+    + '<div style="font-size:11px;color:#6e7681;margin-top:10px;line-height:1.5">• <b>Browser Print</b>: instala Zebra Browser Print en el PC con la Zebra (USB o red), déjalo abierto y pulsa Buscar. Es la forma más estable.<br>• <b>Red por IP</b>: Zebra Link-OS (ZD/ZT) en la misma red. Chrome puede pedir permitir "contenido no seguro" para este sitio.<br>• <b>USB</b>: Chrome en PC/Android reciente.<br>• Si nada de esto aplica, usa 🖨️ Imprimir etiqueta o ⬇️ Descargar ZPL.</div>'
+    + '<button type="button" class="mod-back-btn" style="margin-top:12px;width:100%" onclick="document.getElementById(\'imp-modal\').remove()">Cerrar</button></div>';
+}
 function blImprimir() {
   const b = BUL_SEL ? bulGet(BUL_SEL) : null; if (!b) { alert('Primero selecciona un bulto.'); return; }
   const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
@@ -8891,7 +9001,8 @@ function bulLoteModal() {
     + '<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;font-size:13px;color:#e6edf3;font-weight:700">' + BUL_LOTE.map(function(id) { return '<div>🟢 ' + trasEsc(id) + '</div>'; }).join('') + '</div>'
     + '<div style="font-size:12px;color:#8b949e;margin-bottom:4px">📐 Tamaño de etiqueta</div>'
     + '<select onchange="blSetTam(this.value)" style="width:100%;height:46px;padding:0 12px;box-sizing:border-box;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:15px">' + opts + '</select>'
-    + '<button type="button" class="mod-confirm-btn" style="margin-top:10px" onclick="bulLoteImprimir()">🖨️ Imprimir las ' + BUL_LOTE.length + ' etiquetas</button>'
+    + '<button type="button" class="mod-confirm-btn" style="margin-top:10px" onclick="bulLoteImpZebra()">🖨️ Imprimir directo en Zebra (' + BUL_LOTE.length + ')</button>'
+    + '<button type="button" class="mod-back-btn" style="margin-top:8px" onclick="bulLoteImprimir()">🖨️ Imprimir con diálogo del navegador</button>'
     + '<button type="button" class="mod-back-btn" style="margin-top:8px" onclick="bulLoteZPL()">⬇️ Descargar ZPL (Zebra)</button>'
     + '<button type="button" class="mod-back-btn" style="margin-top:8px" onclick="document.getElementById(\'bl-lote-modal\').remove()">Cerrar</button></div>';
   document.body.appendChild(m);
