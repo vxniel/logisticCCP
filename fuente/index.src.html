@@ -1990,7 +1990,7 @@ function switchTab(tab) {
   if(tab==='conteointerno') { initCIFecha(); renderCI(); }
   if(tab==='barcode') { bcReset(); }
   if(tab==='trazabilidad') { trzReset(); }
-  if(tab==='produccion') { prodReset(); renderProdList(); }
+  if(tab==='produccion') { prodReset(); renderProdList(); pedEntrar(); }
 }
 
 function toggleNavDropdown(name) {
@@ -3700,6 +3700,30 @@ function nuevoProductoSave() {
 <div id="section-produccion" style="display:none">
   <div class="mod-wrap">
 
+  <div id="ped-vista">
+    <div class="mod-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div class="mod-step-label">📋 Mis pedidos</div>
+        <button class="mod-confirm-btn" style="margin:0;width:auto;padding:9px 14px" onclick="pedCrear()">➕ Crear pedido</button>
+      </div>
+      <div id="ped-sync" style="font-size:12px;color:#8b949e;margin-top:6px"></div>
+    </div>
+    <div id="ped-kpis" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px"></div>
+    <div class="mod-card">
+      <div class="sbox"><span class="sico">🔍</span><input id="ped-buscar" type="text" placeholder="Buscar: N° pedido, cliente, usuario, código o producto" autocomplete="off" oninput="pedRender()"/></div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px"><div class="mod-step-desc" style="margin-bottom:4px">📅 Desde</div><div class="lfield"><input id="ped-desde" type="date" onchange="pedRender()"/></div></div>
+        <div style="flex:1;min-width:140px"><div class="mod-step-desc" style="margin-bottom:4px">📅 Hasta</div><div class="lfield"><input id="ped-hasta" type="date" onchange="pedRender()"/></div></div>
+      </div>
+      <div id="ped-tabs" style="display:flex;flex-wrap:wrap;margin-top:10px"></div>
+    </div>
+    <div class="mod-card"><div id="ped-lista"></div></div>
+  </div>
+
+  <div id="prod-builder" style="display:none">
+  <button class="mod-back-btn" style="margin:0 0 10px" onclick="pedVolver()">← Volver a Mis pedidos</button>
+
+
     <div class="mod-card">
       <div class="mod-step-label">🏭 Producción — Pedido por códigos</div>
       <div class="mod-step-desc">Ingresa los códigos del pedido del cliente. Se calcula el total por producto y se genera el picking ordenado por calle (de la 5 a la 1) y, dentro de cada calle, de la ubicación mayor a la menor.</div>
@@ -3753,6 +3777,9 @@ function nuevoProductoSave() {
       </div>
       <div id="prod-items-list" style="display:flex;flex-direction:column;gap:7px"></div>
 
+      <div class="mod-step-desc" style="margin:14px 0 6px">Cliente / referencia (opcional)</div>
+      <div class="sbox"><span class="sico">🏷️</span><input id="ped-cliente" type="text" placeholder="Ej: cliente, OC o referencia" autocomplete="off"/></div>
+      <button class="mod-confirm-btn" style="margin-top:10px" onclick="pedGuardar()">💾 Guardar pedido (queda en Mis pedidos)</button>
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
         <button class="mod-confirm-btn" style="margin-top:0" onclick="prodGenerarPicking()">🧭 Generar picking</button>
         <button class="mod-back-btn" onclick="prodClearListClick()">🗑 Limpiar pedido</button>
@@ -3810,6 +3837,7 @@ function nuevoProductoSave() {
       </div>
     </div>
 
+  </div><!-- /prod-builder -->
   </div>
 </div><!-- /section-produccion -->
 
@@ -3845,6 +3873,7 @@ function sincPestanas() {
   try {
     consecRescatarHuerfanas();
     const c = document.getElementById('section-consec'); if (c && c.style.display !== 'none') renderConsecList();
+    const sp = document.getElementById('section-produccion'); if (sp && sp.style.display !== 'none' && document.getElementById('ped-vista').style.display !== 'none') pedRender();
     const sb = document.getElementById('section-barcode');
     if (sb && sb.style.display !== 'none') {
       const p = document.getElementById('bc-panel-bulto'), q = document.getElementById('bc-panel-verif');
@@ -3856,7 +3885,7 @@ function sincPestanas() {
 }
 function sincPestanasProg() { if (_spBusy) return; clearTimeout(window._spT); window._spT = setTimeout(sincPestanas, 60); }
 // ---- La app siempre arranca en la fecha actual: al entrar a cada pestaña con selector de fecha y al cambiar el día ----
-const FECHA_INPUTS = { consec: ['consec-fecha'], barcode: ['bl-fecha', 'ver-fecha'], consolidado: ['consol-date-select'], creapallets: ['cp-date-select'], conteointerno: ['ci-date-select'], indic: ['indic-date-select', 'indic-totales-date-select'], turno: ['turno-date-select'] };
+const FECHA_INPUTS = { consec: ['consec-fecha'], barcode: ['bl-fecha', 'ver-fecha'], consolidado: ['consol-date-select'], creapallets: ['cp-date-select'], conteointerno: ['ci-date-select'], indic: ['indic-date-select', 'indic-totales-date-select'], turno: ['turno-date-select'], produccion: ['ped-desde', 'ped-hasta'] };
 function fechasAHoy(tab) {
   const hoy = consecHoyKey();
   (FECHA_INPUTS[tab] || []).forEach(function(id) { const e = document.getElementById(id); if (e) e.value = hoy; });
@@ -5437,8 +5466,8 @@ function _setupFirebase() {
       // al día. 'stock' no se reaplica aquí: su estado vive en estado_stock.
       const esReplay = !!changeTs && changeTs < _fbStartTs - 5000;
       if (esReplay && d.tipo === 'stock') return;
-      if (/^(consec|bulto)/.test(String(d.tipo || ''))) {
-        try { const r1 = String(d.tipo).indexOf('bulto') === 0 ? window.bultoAplicarCambio(d) : window.consecAplicarCambio(d); if (r1) { consecRefrescar(); bulRefrescar(); } } catch(e) { console.error('consecutivo/bulto recibido falló', e); }
+      if (/^(consec|bulto|pedido)/.test(String(d.tipo || ''))) {
+        try { const r1 = String(d.tipo).indexOf('bulto') === 0 ? window.bultoAplicarCambio(d) : (String(d.tipo).indexOf('pedido') === 0 ? window.pedidoAplicarCambio(d) : window.consecAplicarCambio(d)); if (r1) { consecRefrescar(); bulRefrescar(); } } catch(e) { console.error('consecutivo/bulto recibido falló', e); }
         return;
       }
       const esEcoLocal = d.saveId && window._recentLocalSaves && window._recentLocalSaves.has(d.saveId);
@@ -5617,7 +5646,7 @@ function _setupFirebase() {
               Object.keys(todo).forEach(function(id) {
                 const d = todo[id]; if (!d || !d.cod || !d.ts) return;
                 if (new Date(d.ts).getTime() < _fbBaseTs) return;
-                if (/^(consec|bulto)/.test(String(d.tipo || ''))) { try { if ((String(d.tipo).indexOf('bulto') === 0 ? window.bultoAplicarCambio(d) : window.consecAplicarCambio(d))) recibidos++; } catch(e) {} return; }
+                if (/^(consec|bulto|pedido)/.test(String(d.tipo || ''))) { try { if ((String(d.tipo).indexOf('bulto') === 0 ? window.bultoAplicarCambio(d) : (String(d.tipo).indexOf('pedido') === 0 ? window.pedidoAplicarCambio(d) : window.consecAplicarCambio(d)))) recibidos++; } catch(e) {} return; }
                 if (d.tipo !== 'ubic' && d.tipo !== 'nuevo' && d.tipo !== 'stock') return;
                 const tt = new Date(d.ts).getTime(), aa = String(d.a||'').toUpperCase(), dde = String(d.de||'').toUpperCase();
                 const lst = (claves[d.cod] = claves[d.cod] || []);
@@ -9329,6 +9358,124 @@ function renderProdPicking(grupos, faltantes) {
 }
 
 // ── Picking interactivo: ir a la ubicación y confirmar escaneando el producto ──
+// ===== MIS PEDIDOS (Producción): lista con estados, filtros y sincronización en línea =====
+let PED_TAB = '*', PED_EXP = {}, PED_ACTIVO = null;
+const PED_EST = { proc: ['Para procesar', '#d29922'], prep: ['En preparación', '#58a6ff'], term: ['Terminado', '#3fb950'], canc: ['Cancelado', '#f85149'] };
+function pedAll() { try { return JSON.parse(localStorage.getItem('dimerc_pedidos') || '[]'); } catch(e) { return []; } }
+function pedSet(a) { try { localStorage.setItem('dimerc_pedidos', JSON.stringify(a)); } catch(e) {} sincPestanasProg(); }
+function pedGet(id) { return pedAll().filter(function(p) { return p.id === id; })[0] || null; }
+function pedCodigo(fecha, num) {
+  const f = fecha.split('-'), A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return 'P' + f[2] + f[1] + String(f[0]).slice(2) + '-' + (num < 10 ? '0' + num : num) + A.charAt(Math.floor(Math.random() * A.length)) + A.charAt(Math.floor(Math.random() * A.length));
+}
+function pedPublicar(p) {
+  p.upd = new Date().toISOString();
+  const all = pedAll(), i = all.findIndex(function(x) { return x.id === p.id; });
+  if (i >= 0) all[i] = p; else all.push(p);
+  pedSet(all);
+  try { window.encolarCambio('—', 'Pedido ' + p.id, '—', '—', consecYo(), 'pedido_set', { pid: p.id, ped: p }); } catch(e) { console.error('pedido no encolado', e); }
+}
+window.pedidoAplicarCambio = function(d) {
+  const all = pedAll();
+  if (d.tipo === 'pedido_set') {
+    const np = d.ped; if (!np || !np.id) return false;
+    const i = all.findIndex(function(x) { return x.id === np.id; });
+    if (i >= 0) { if (String(all[i].upd || '') >= String(np.upd || '')) return false; all[i] = np; } else all.push(np);
+    pedSet(all); return true;
+  }
+  if (d.tipo === 'pedido_borrar') { const r = all.filter(function(x) { return x.id !== d.pid; }); if (r.length === all.length) return false; pedSet(r); return true; }
+  return false;
+};
+function pedMostrar(build) {
+  document.getElementById('ped-vista').style.display = build ? 'none' : '';
+  document.getElementById('prod-builder').style.display = build ? '' : 'none';
+  if (!build) pedRender();
+}
+function pedEntrar() {
+  const enCurso = getProdList().length || getProdRun();
+  pedMostrar(!!enCurso); pedRender();
+}
+function pedCrear() { PED_ACTIVO = null; document.getElementById('ped-cliente').value = ''; pedMostrar(true); renderProdList(); }
+function pedVolver() { pedMostrar(false); }
+function pedGuardar() {
+  const yo = consecYo(); if (!yo) { alert('Inicia sesión.'); return; }
+  const list = getProdList(); if (!list.length) { alert('Agrega productos al pedido primero.'); return; }
+  const cliente = String(document.getElementById('ped-cliente').value || '').trim();
+  const items = list.map(function(it) { return { cod: it.cod, desc: it.desc, cantidad: it.cantidad }; });
+  let p = PED_ACTIVO ? pedGet(PED_ACTIVO) : null;
+  if (p) { p.items = items; p.cliente = cliente; }
+  else {
+    const fecha = consecHoyKey(), nums = pedAll().filter(function(x) { return x.fecha === fecha; }).map(function(x) { return x.num; });
+    const num = (nums.length ? Math.max.apply(null, nums) : 0) + 1; let id = pedCodigo(fecha, num); while (pedGet(id)) id = pedCodigo(fecha, num);
+    p = { id: id, fecha: fecha, num: num, cliente: cliente, estado: 'proc', user: yo, ts: new Date().toISOString(), items: items };
+  }
+  pedPublicar(p);
+  localStorage.removeItem('dimerc_produccion'); localStorage.removeItem('dimerc_produccion_run');
+  document.getElementById('prod-picking-card').style.display = 'none'; document.getElementById('prod-run-card').style.display = 'none'; prodLastPicking = null;
+  PED_ACTIVO = null; document.getElementById('ped-cliente').value = ''; renderProdList();
+  try { (window.showToast || function() {})('💾 Pedido ' + p.id + ' guardado'); } catch(e) {}
+  pedMostrar(false);
+}
+function pedPreparar(id) {
+  const p = pedGet(id); if (!p || p.estado === 'canc') return;
+  if (getProdList().length && PED_ACTIVO !== id && !confirm('Hay un pedido sin guardar en el constructor: se reemplazará por este. ¿Continuar?')) return;
+  localStorage.setItem('dimerc_produccion', JSON.stringify(p.items.map(function(it) { return { cod: it.cod, desc: it.desc, cantidad: it.cantidad, ts: new Date().toLocaleString('es-CL') }; })));
+  localStorage.removeItem('dimerc_produccion_run');
+  PED_ACTIVO = id; document.getElementById('ped-cliente').value = p.cliente || '';
+  if (p.estado === 'proc') { p.estado = 'prep'; p.prepPor = consecYo(); pedPublicar(p); }
+  prodReset(); renderProdList(); pedMostrar(true);
+}
+function pedEstado(id, est) {
+  const p = pedGet(id); if (!p) return;
+  const txt = { term: 'marcar como TERMINADO', canc: 'CANCELAR', proc: 'devolver a PARA PROCESAR' }[est];
+  if (!confirm('¿Seguro que quieres ' + txt + ' el pedido ' + p.id + '?')) return;
+  p.estado = est; pedPublicar(p); if (PED_ACTIVO === id && est !== 'prep') PED_ACTIVO = null; pedRender();
+}
+function pedEliminar(id) {
+  const p = pedGet(id); if (!p) return;
+  if (!confirm('¿Eliminar el pedido ' + p.id + ' y sus ' + p.items.length + ' producto(s)? No se puede deshacer.')) return;
+  pedSet(pedAll().filter(function(x) { return x.id !== id; }));
+  try { window.encolarCambio('—', 'Pedido eliminado', '—', '—', consecYo(), 'pedido_borrar', { pid: id }); } catch(e) {}
+  if (PED_ACTIVO === id) PED_ACTIVO = null; delete PED_EXP[id]; pedRender();
+}
+function pedTab(t) { PED_TAB = t; pedRender(); }
+function pedToggle(id) { PED_EXP[id] = !PED_EXP[id]; pedRender(); }
+// al terminar el picking de un pedido guardado, queda como Terminado
+function pedTerminarActivo() { if (!PED_ACTIVO) return; const p = pedGet(PED_ACTIVO); if (p && p.estado !== 'canc') { p.estado = 'term'; pedPublicar(p); } PED_ACTIVO = null; }
+function pedRender() {
+  const box = document.getElementById('ped-lista'); if (!box) return;
+  const E = trasEsc, d1 = document.getElementById('ped-desde').value, d2 = document.getElementById('ped-hasta').value, q = String(document.getElementById('ped-buscar').value || '').trim().toUpperCase();
+  const base = pedAll().filter(function(p) {
+    if (d1 && p.fecha < d1) return false; if (d2 && p.fecha > d2) return false;
+    if (!q) return true;
+    return p.id.indexOf(q) >= 0 || String(p.cliente || '').toUpperCase().indexOf(q) >= 0 || String(p.user || '').toUpperCase().indexOf(q) >= 0 || p.items.some(function(it) { return String(it.cod).indexOf(q) >= 0 || String(it.desc || '').toUpperCase().indexOf(q) >= 0; });
+  });
+  const cnt = { proc: 0, prep: 0, term: 0, canc: 0 }; let uni = 0;
+  base.forEach(function(p) { cnt[p.estado] = (cnt[p.estado] || 0) + 1; if (p.estado !== 'canc') p.items.forEach(function(it) { uni += parseInt(it.cantidad, 10) || 0; }); });
+  const card = function(n, lab, col) { return '<div class="mod-product-preview" style="text-align:center"><div style="font-size:24px;font-weight:800;color:' + col + '">' + n + '</div><div style="font-size:11px;color:#7d8590;margin-top:2px">' + lab + '</div></div>'; };
+  document.getElementById('ped-kpis').innerHTML = card(base.length, 'Total pedidos', '#e6edf3') + card(cnt.proc, 'Para procesar', '#d29922') + card(cnt.prep, 'En preparación', '#58a6ff') + card(uni, 'Unidades pedidas', '#3fb950');
+  const tabs = [['*', 'Todos', base.length], ['proc', 'Para procesar', cnt.proc], ['prep', 'En preparación', cnt.prep], ['term', 'Terminado', cnt.term], ['canc', 'Cancelado', cnt.canc]];
+  document.getElementById('ped-tabs').innerHTML = tabs.map(function(t) { return '<button type="button" class="jaula-btn ' + (PED_TAB === t[0] ? 'active' : '') + '" style="margin:0 6px 6px 0" onclick="pedTab(\'' + t[0] + '\')">' + t[1] + ' <b>' + t[2] + '</b></button>'; }).join('');
+  const lista = base.filter(function(p) { return PED_TAB === '*' || p.estado === PED_TAB; }).sort(function(a, b) { return String(b.ts) < String(a.ts) ? -1 : 1; });
+  const sy = document.getElementById('ped-sync'); if (sy) sy.textContent = !window._fbReady ? '🔴 Sin conexión: los pedidos se enviarán solos al volver' : '🟢 En línea: los pedidos se actualizan solos en todos los equipos';
+  if (!lista.length) { box.innerHTML = '<div style="text-align:center;padding:20px;color:#484f58;font-size:13px"><div style="font-size:30px;margin-bottom:6px">📋</div>' + (base.length ? 'Ningún pedido en este estado.' : 'No hay pedidos en este rango de fechas. Crea uno con "➕ Crear pedido".') + '</div>'; return; }
+  box.innerHTML = lista.map(function(p) {
+    const es = PED_EST[p.estado] || PED_EST.proc, ab = !!PED_EXP[p.id], u = p.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0), hora = new Date(p.ts).toLocaleString('es-CL');
+    let h = '<div style="border:1px solid #30363d;border-radius:10px;background:#0d1117;margin-bottom:8px"><div onclick="pedToggle(\'' + p.id + '\')" style="cursor:pointer;padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800;color:#58a6ff;font-size:14px">📋 ' + E(p.id) + '</div><span style="font-size:11px;font-weight:700;color:' + es[1] + ';border:1px solid ' + es[1] + ';border-radius:20px;padding:2px 10px">' + es[0] + '</span></div>'
+      + (p.cliente ? '<div style="font-size:13px;color:#e6edf3;margin-top:3px">' + E(p.cliente) + '</div>' : '')
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:11px;color:#8b949e"><span>🕐 ' + E(hora) + ' · 👤 ' + E(p.user || '—') + '</span><span><b style="color:#e6edf3">' + p.items.length + '</b> art. · <b style="color:#3fb950">' + u + '</b> uni. ' + (ab ? '&#9652;' : '&#9662;') + '</span></div></div>';
+    if (ab) {
+      h += '<div style="padding:0 12px 10px;display:flex;flex-direction:column;gap:6px">' + p.items.map(function(it) { return '<div class="hist-item"><div class="hist-item-name">' + E(it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + E(it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + E(it.cantidad) + '</b></div></div>'; }).join('')
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">'
+        + (p.estado === 'proc' || p.estado === 'prep' ? '<button type="button" class="mod-confirm-btn" style="margin:0;flex:1" onclick="pedPreparar(\'' + p.id + '\')">' + (p.estado === 'proc' ? '▶ Preparar' : '▶ Continuar') + '</button>' : '')
+        + (p.estado === 'prep' ? '<button type="button" class="mod-back-btn" style="margin:0;flex:1" onclick="pedEstado(\'' + p.id + '\',\'term\')">✔ Terminado</button>' : '')
+        + (p.estado === 'term' || p.estado === 'canc' ? '<button type="button" class="mod-back-btn" style="margin:0;flex:1" onclick="pedEstado(\'' + p.id + '\',\'proc\')">↩ Volver a procesar</button>' : '')
+        + (p.estado === 'proc' || p.estado === 'prep' ? '<button type="button" class="mod-back-btn" style="margin:0;flex:1" onclick="pedEstado(\'' + p.id + '\',\'canc\')">✖ Cancelar</button>' : '')
+        + '<button type="button" class="mod-back-btn" style="margin:0;flex:1;border-color:#f85149;color:#f85149" onclick="pedEliminar(\'' + p.id + '\')">🗑 Eliminar</button></div></div>';
+    }
+    return h + '</div>';
+  }).join('');
+}
 function getProdRun() {
   try { return JSON.parse(localStorage.getItem('dimerc_produccion_run')||'null'); }
   catch(e) { return null; }
@@ -9441,12 +9588,14 @@ function prodCancelarRun() {
 
 function prodFinalizarRun() {
   if (!confirm('¿Finalizar y limpiar el pedido completo?')) return;
+  try { pedTerminarActivo(); } catch(e) {}
   localStorage.removeItem('dimerc_produccion_run');
   localStorage.removeItem('dimerc_produccion');
   document.getElementById('prod-run-card').style.display = 'none';
   document.getElementById('prod-picking-card').style.display = 'none';
   prodLastPicking = null;
   renderProdList();
+  try { pedMostrar(false); } catch(e) {}
 }
 
 document.getElementById('prod-run-scan').addEventListener('keydown', e => {
