@@ -3018,6 +3018,7 @@ function nuevoProductoSave() {
         <span id="consec-acc-arrow" style="font-size:16px;color:#58a6ff"></span>
       </div>
       <div id="consec-chips" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
+      <div id="consec-papelera" style="display:none;margin-top:8px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
         <button class="mod-back-btn" id="consec-nuevo-btn" style="margin:0" onclick="consecNuevo()">➕ Nuevo consecutivo</button>
         <button class="mod-back-btn" id="consec-selmode-btn" style="margin:0" onclick="consecToggleMulti()">☑️ Seleccionar cons.</button>
@@ -4025,7 +4026,8 @@ function consecBuscarProd(raw, enter) {
   bulAll().forEach(function(b) { if (b.estado === 'abierto') b.items.forEach(function(it) { if (coincide(it.cod, it.desc)) sueltos.push({ b: b, it: it }); }); });
   const gs = Object.keys(grupos).map(function(k) { return grupos[k]; }).sort(function(a, b) { return a.fecha < b.fecha ? 1 : (a.fecha > b.fecha ? -1 : b.n - a.n); });
   let nl = 0, nu = 0; gs.forEach(function(g) { g.l.forEach(function(x) { nl++; nu += parseInt(x.cantidad, 10) || 0; }); });
-  if (!gs.length && !sueltos.length) { consecBscRes('<div style="border:1px solid #30363d;border-radius:10px;padding:10px 12px;background:#0d1117;font-size:13px;color:#d29922">🔎 <b>' + E(q) + '</b>: no aparece en ningún consecutivo (aún no se ha pickeado).</div>'); return; }
+  const elim = consecPapVigente().filter(function(e) { return coincide(e.cod, e.desc); });
+  if (!gs.length && !sueltos.length && !elim.length) { consecBscRes('<div style="border:1px solid #30363d;border-radius:10px;padding:10px 12px;background:#0d1117;font-size:13px;color:#d29922">🔎 <b>' + E(q) + '</b>: no aparece en ningún consecutivo (aún no se ha pickeado).</div>'); return; }
   let h = '<div style="border:1px solid #30363d;border-radius:10px;padding:10px 12px;background:#0d1117"><div style="font-size:13px;font-weight:800;color:#58a6ff;margin-bottom:8px">🔎 ' + E(q) + ' · ' + nl + (nl === 1 ? ' línea' : ' líneas') + ' en ' + gs.length + (gs.length === 1 ? ' consecutivo' : ' consecutivos') + ' · ' + nu + ' uni.</div><div style="display:flex;flex-direction:column;gap:8px">';
   gs.slice(0, 40).forEach(function(g) {
     const u = g.l.reduce(function(a, x) { return a + (parseInt(x.cantidad, 10) || 0); }, 0);
@@ -4038,6 +4040,7 @@ function consecBuscarProd(raw, enter) {
   if (sueltos.length) h += '<div style="font-size:12px;color:#d29922;margin-top:4px">📦 En cajas abiertas, aún sin consecutivo cerrado:</div>' + sueltos.slice(0, 20).map(function(s) {
     return '<div class="hist-item"><div class="hist-item-name">' + E(s.it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + E(s.it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + E(s.it.cantidad) + '</b> · 📦 <b style="color:#58a6ff">' + E(s.b.id) + '</b> 🟢 abierto' + (s.b.consec ? ' → ' + E(consecNombre(s.b.fecha, s.b.consec)) : '') + '</div><div class="hist-item-user" style="margin:4px 0 0">👤 ' + E(s.it.user) + ' · 🕐 ' + E(s.it.ts) + '</div></div>';
   }).join('');
+  if (elim.length) h += '<div style="font-size:12px;color:#f85149;margin-top:6px">🗑 Quitados de un consecutivo (se pueden restaurar):</div>' + elim.slice(0, 20).map(consecPapFila).join('');
   consecBscRes(h + '</div></div>');
 }
 function consecIrA(fecha, n) {
@@ -4161,6 +4164,7 @@ window.consecAplicarCambio = function(d) {
     return res;
   }
   if (d.tipo === 'consec') {
+    try { consecOrigSet(d.cid, d.ts); } catch(e) {}
     if (consecEsBorrado(d.fecha, d.n)) return false;
     const all = consecAll();
     if (all.some(function(x) { return x.id === d.cid; })) return false;
@@ -4172,6 +4176,11 @@ window.consecAplicarCambio = function(d) {
     m[d.fecha] = d.n; consecMetaSet(m); return true;
   }
   if (d.tipo === 'consec_del') {
+    try {
+      const ex = consecAll().filter(function(x) { return x.id === d.cid; })[0];
+      consecPapAgregar(ex ? { cid: ex.id, cod: ex.cod, desc: ex.desc, ubic: ex.ubic, cantidad: ex.cantidad, fecha: ex.fecha, n: ex.n, user: ex.user, ts: ex._tsRaw || consecOrigMap()[d.cid] || '', delTs: d.ts }
+        : { cid: d.cid, cod: d.cod, desc: d.desc, ubic: d.ubicP || d.a || '—', cantidad: d.cantidad, fecha: d.fecha, n: d.n, user: d.user, ts: consecOrigMap()[d.cid] || '', delTs: d.ts });
+    } catch(e) {}
     const all = consecAll(), r = all.filter(function(x) { return x.id !== d.cid; });
     if (r.length === all.length) return false;
     consecSetAll(r); return true;
@@ -4261,8 +4270,57 @@ function consecAddItem() {
   consecCodEl.focus();
 }
 
+// ---- Papelera: productos quitados de un consecutivo se pueden restaurar (se arma también con el registro de cambios en línea) ----
+let _consecOrig = null, _consecOrigT = null, consecPapAbierto = false;
+function consecOrigMap() { if (!_consecOrig) { try { _consecOrig = JSON.parse(localStorage.getItem('dimerc_consec_origen') || '{}'); } catch(e) { _consecOrig = {}; } } return _consecOrig; }
+function consecOrigSet(cid, ts) {
+  const m = consecOrigMap(); if (m[cid] === ts) return; m[cid] = ts;
+  clearTimeout(_consecOrigT); _consecOrigT = setTimeout(function() { try { const k = Object.keys(m); if (k.length > 6000) k.slice(0, k.length - 6000).forEach(function(x) { delete m[x]; }); localStorage.setItem('dimerc_consec_origen', JSON.stringify(m)); } catch(e) {} }, 1500);
+}
+function consecPapGet() { try { return JSON.parse(localStorage.getItem('dimerc_consec_papelera') || '[]'); } catch(e) { return []; } }
+function consecPapSet(a) { try { localStorage.setItem('dimerc_consec_papelera', JSON.stringify(a.slice(-400))); } catch(e) {} }
+function consecPapAgregar(e) {
+  if (!e || !e.cid || String(e.cid).indexOf('bu_') === 0) return;   // las líneas que vienen de una caja se manejan desde el bulto
+  const a = consecPapGet().filter(function(x) { return x.cid !== e.cid; }); a.push(e); consecPapSet(a);
+}
+function consecPapVigente() {
+  const ids = {}; consecAll().forEach(function(x) { ids[x.id] = 1; });
+  return consecPapGet().filter(function(e) { return !ids[e.cid] && !consecEsBorrado(e.fecha, e.n); }).sort(function(a, b) { return String(b.delTs || '') < String(a.delTs || '') ? -1 : 1; });
+}
+function consecPapFila(e) {
+  const E = trasEsc, cuando = e.delTs ? new Date(e.delTs).toLocaleString('es-CL') : '';
+  return '<div class="hist-item"><div class="hist-item-name">' + E(e.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + E(e.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + E(e.cantidad) + '</b> · ' + E(consecNombre(e.fecha, e.n)) + '</div>'
+    + '<div class="hist-item-user" style="margin:4px 0 0">👤 ' + E(e.user) + (cuando ? ' · 🗑 quitado ' + E(cuando) : '') + '</div>'
+    + '<button type="button" class="mod-confirm-btn" style="margin:6px 0 0" onclick="consecRestaurar(\'' + E(e.cid) + '\')">↩ Restaurar al ' + E(consecNombre(e.fecha, e.n)) + '</button></div>';
+}
+function consecRenderPapelera() {
+  const box = document.getElementById('consec-papelera'); if (!box) return;
+  const lst = consecPapVigente().filter(function(e) { return e.fecha === consecSel.fecha; });
+  if (!lst.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div onclick="consecPapToggle()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;border:1px dashed #f85149;border-radius:10px;font-size:13px;color:#f85149"><span>🗑 Quitados recientemente · ' + lst.length + ' (se pueden restaurar)</span><span>' + (consecPapAbierto ? '&#9652;' : '&#9662;') + '</span></div>'
+    + (consecPapAbierto ? '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">' + lst.map(consecPapFila).join('') + '</div>' : '');
+}
+function consecPapToggle() { consecPapAbierto = !consecPapAbierto; consecRenderPapelera(); }
+function consecRestaurar(cid) {
+  const e = consecPapGet().filter(function(x) { return x.cid === cid; })[0]; if (!e) return;
+  if (consecEsBorrado(e.fecha, e.n)) { alert('Ese consecutivo fue eliminado.'); return; }
+  if (!confirm('¿Restaurar este producto al ' + consecNombre(e.fecha, e.n) + '?\n\n' + (e.desc || e.cod) + '\nCódigo ' + e.cod + ' · Cantidad ' + e.cantidad)) return;
+  const all = consecAll();
+  if (!all.some(function(x) { return x.id === cid; })) {
+    const raw = e.ts || new Date().toISOString();
+    const it = { id: cid, cod: e.cod, desc: e.desc, ubic: e.ubic || '—', cantidad: e.cantidad, ts: new Date(raw).toLocaleString('es-CL'), _tsRaw: raw, fecha: e.fecha, n: e.n, user: e.user };
+    all.push(it); consecSetAll(all);
+    const m = consecMeta(); if ((m[e.fecha] || 0) < e.n) { m[e.fecha] = e.n; consecMetaSet(m); }
+    consecEncolar('consec', it);
+  }
+  consecPapSet(consecPapGet().filter(function(x) { return x.cid !== cid; }));
+  try { (window.showToast || function() {})('↩ Restaurado en ' + consecNombre(e.fecha, e.n)); } catch(e2) {}
+  consecIrA(e.fecha, e.n);
+}
 function consecQuitarPorId(id) {
   const all = consecAll(), it = all.filter(function(x) { return x.id === id; })[0];
+  if (it) consecPapAgregar({ cid: it.id, cod: it.cod, desc: it.desc, ubic: it.ubic, cantidad: it.cantidad, fecha: it.fecha, n: it.n, user: it.user, ts: it._tsRaw || consecOrigMap()[it.id] || '', delTs: new Date().toISOString() });
   consecSetAll(all.filter(function(x) { return x.id !== id; }));
   if (it) consecEncolar('consec_del', it);
 }
@@ -4368,6 +4426,7 @@ function renderConsecList() {
   if (chips && bsH.length) chips.innerHTML += '<div onclick="consecHistToggle()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;padding:9px 12px;border:1px dashed #30363d;border-radius:10px;font-size:13px;color:#8b949e"><span>🗂 Historial · ' + bsH.length + (bsH.length === 1 ? ' bulto anulado' : ' bultos anulados') + ' (consecutivo eliminado)</span><span style="color:#58a6ff">' + (consecHistAbierto ? '&#9652;' : '&#9662;') + '</span></div>' + (consecHistAbierto ? bsH.map(consecFilaBulto).join('') : '');
   const ah = document.getElementById('consec-acc-title'); if (ah) ah.textContent = '📅 ' + consecFmtFecha(consecSel.fecha) + ' · ' + ns.length + (ns.length === 1 ? ' consecutivo' : ' consecutivos') + (bsF.length ? ' · ' + bsF.length + (bsF.length === 1 ? ' bulto' : ' bultos') : '');
   consecAccAplicar();
+  try { consecRenderPapelera(); } catch(e) {}
   const mb = document.getElementById('consec-multi-bar'); if (mb) mb.style.display = consecMulti.on ? 'block' : 'none';
   const sb = document.getElementById('consec-selmode-btn'); if (sb) sb.textContent = consecMulti.on ? '✖ Salir de selección' : '☑️ Seleccionar cons.';
   const mi = document.getElementById('consec-multi-info'); if (mi) { const k = Object.keys(consecMulti.sel).filter(function(x) { return consecMulti.sel[x] && ns.indexOf(Number(x)) >= 0; }).length; mi.textContent = k ? k + ' consecutivo(s) seleccionado(s)' : 'Toca los consecutivos que quieres incluir'; }
