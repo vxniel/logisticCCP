@@ -4140,7 +4140,8 @@ function consecFilaBulto(b) {
   const uni = b.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0), ab = !!consecCajasExp[b.id], completo = USUARIOS_COMPLETOS.indexOf(consecYo()) >= 0;
   let h = '<div><button type="button" class="jaula-btn ' + (ab ? 'active' : '') + '" style="margin:0;width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px" onclick="consecCajaToggle(\'' + b.id + '\')"><span>' + bulIcono(b) + ' Bulto ' + trasEsc(b.id) + (b.estado === 'anulado' ? ' · NULO' : '') + '</span><span style="font-size:11px;font-weight:600;opacity:.8">' + Object.keys(cods).length + ' prod. · ' + uni + ' uni. ' + (ab ? '&#9652;' : '&#9662;') + '</span></button>';
   if (ab) {
-    h += '<div style="padding:6px 0 2px;display:flex;flex-direction:column;gap:6px">' + (b.items.length ? b.items.map(function(it) {
+    const pd = pedDeBulto(b.id);
+    h += (pd ? '<div style="font-size:12px;color:#58a6ff;padding:6px 0 0">📋 Pedido <b>' + trasEsc(pd.id) + '</b>' + (pd.cliente ? ' · ' + trasEsc(pd.cliente) : '') + '</div>' : '') + '<div style="padding:6px 0 2px;display:flex;flex-direction:column;gap:6px">' + (b.items.length ? b.items.map(function(it) {
       return '<div class="hist-item"><div class="hist-item-name">' + trasEsc(it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + trasEsc(it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + trasEsc(it.cantidad) + '</b></div><div class="hist-item-user" style="margin:4px 0 0">👤 ' + trasEsc(it.user) + ' · 🕐 ' + trasEsc(it.ts) + '</div></div>';
     }).join('') : '<div style="font-size:12px;color:#7d8590">Esta caja aún no tiene productos.</div>')
       + (completo && b.estado === 'abierto' && !b.consec ? '<button type="button" class="mod-confirm-btn" style="margin:2px 0 0" onclick="bulVincular(\'' + b.id + '\')">🔗 Asignar a ' + trasEsc(consecNombre(consecSel.fecha, consecSel.n)) + '</button>' : '')
@@ -8629,6 +8630,7 @@ function verRender() {
     res.style.display = 'block';
     res.innerHTML = cab
       + '<div style="font-size:15px;font-weight:800;color:#58a6ff">📦 ' + E(b.id) + '</div>'
+      + (pedDeBulto(b.id) ? '<div style="font-size:12px;color:#58a6ff;margin-top:2px">📋 Pedido ' + E(pedDeBulto(b.id).id) + (pedDeBulto(b.id).cliente ? ' · ' + E(pedDeBulto(b.id).cliente) : '') + '</div>' : '')
       + '<div style="font-size:12px;color:#8b949e;margin:3px 0 10px">Fecha ' + dt.fecha + ' · Creado por ' + E(b.user || '—') + ' · <b style="color:#e6edf3">' + dt.art + '</b> artículos · <b style="color:#3fb950">' + dt.uni + '</b> unidades</div>'
       + '<div style="display:flex;flex-direction:column;gap:6px">' + (b.items.length ? b.items.map(function(it) {
         return '<div class="hist-item"><div class="hist-item-name">' + E(it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + E(it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + E(it.cantidad) + '</b></div><div class="hist-item-user" style="margin:4px 0 0">👤 ' + E(it.user) + ' · 🕐 ' + E(it.ts) + '</div></div>';
@@ -9427,8 +9429,9 @@ function pedPreparar(id) {
 }
 function pedEstado(id, est) {
   const p = pedGet(id); if (!p) return;
+  let extra = ''; if (est === 'term') { const av = pedAvance(p); if (av.falt || av.sobra) extra = '\n\n⚠️ Ojo: ' + (av.falt ? av.falt + ' producto(s) con faltantes' : '') + (av.falt && av.sobra ? ' y ' : '') + (av.sobra ? av.sobra + ' con sobrante/no pedidos' : '') + ' en los bultos enlazados.'; }
   const txt = { term: 'marcar como TERMINADO', canc: 'CANCELAR', proc: 'devolver a PARA PROCESAR' }[est];
-  if (!confirm('¿Seguro que quieres ' + txt + ' el pedido ' + p.id + '?')) return;
+  if (!confirm('¿Seguro que quieres ' + txt + ' el pedido ' + p.id + '?' + extra)) return;
   p.estado = est; pedPublicar(p); if (PED_ACTIVO === id && est !== 'prep') PED_ACTIVO = null; pedRender();
 }
 function pedEliminar(id) {
@@ -9442,6 +9445,45 @@ function pedTab(t) { PED_TAB = t; pedRender(); }
 function pedToggle(id) { PED_EXP[id] = !PED_EXP[id]; pedRender(); }
 // al terminar el picking de un pedido guardado, queda como Terminado
 function pedTerminarActivo() { if (!PED_ACTIVO) return; const p = pedGet(PED_ACTIVO); if (p && p.estado !== 'canc') { p.estado = 'term'; pedPublicar(p); } PED_ACTIVO = null; }
+// ---- Enlace pedido ↔ bultos (los bultos ya vienen de Generar con CB / consecutivos) ----
+function pedDeBulto(bid) { return pedAll().filter(function(p) { return (p.bultos || []).indexOf(bid) >= 0 && p.estado !== 'canc'; })[0] || null; }
+function pedPreparado(p) {
+  const m = {}; (p.bultos || []).forEach(function(id) { const b = bulGet(id); if (!b || b.estado === 'anulado') return; b.items.forEach(function(it) { m[it.cod] = (m[it.cod] || 0) + (parseInt(it.cantidad, 10) || 0); }); });
+  return m;
+}
+function pedAvance(p) {
+  const m = pedPreparado(p); let pid = 0, ok = 0, falt = 0, sobra = 0;
+  p.items.forEach(function(it) { const n = parseInt(it.cantidad, 10) || 0, h = m[it.cod] || 0; pid += n; ok += Math.min(n, h); if (h < n) falt++; if (h > n) sobra++; });
+  Object.keys(m).forEach(function(c) { if (!p.items.some(function(it) { return it.cod === c; })) sobra++; });
+  return { m: m, pid: pid, ok: ok, falt: falt, sobra: sobra, pct: pid ? Math.round(ok * 100 / pid) : 0 };
+}
+function pedLigar(id) {
+  const p = pedGet(id); if (!p) return; const inp = document.getElementById('ped-lig-' + id); const v = String(inp.value || '').trim().toUpperCase().replace(/\s+/g, ''); if (!v) return;
+  let b = bulGet(v); if (!b) { const c = bulAll().filter(function(x) { return x.id.indexOf(v) === 0; }); if (c.length === 1) b = c[0]; }
+  const msg = function(t) { try { (window.showToast || function() {})(t); } catch(e) {} };
+  if (!b) { msg('❌ Bulto ' + v + ' no existe'); inp.select(); return; }
+  if (b.estado === 'anulado') { msg('🚫 Ese bulto está anulado'); return; }
+  if ((p.bultos || []).indexOf(b.id) >= 0) { msg('Ya está en este pedido'); inp.value = ''; return; }
+  const o = pedDeBulto(b.id); if (o) { msg('⚠️ ' + b.id + ' ya está en el pedido ' + o.id); return; }
+  p.bultos = (p.bultos || []).concat([b.id]); PED_EXP[id] = true; pedPublicar(p); msg('🔗 ' + b.id + ' → ' + p.id); pedRender();
+  setTimeout(function() { const n = document.getElementById('ped-lig-' + id); if (n) n.focus(); }, 50);
+}
+function pedDesligar(id, bid) {
+  const p = pedGet(id); if (!p || !confirm('¿Quitar el bulto ' + bid + ' del pedido ' + p.id + '?')) return;
+  p.bultos = (p.bultos || []).filter(function(x) { return x !== bid; }); pedPublicar(p); pedRender();
+}
+function pedBultosHtml(p) {
+  const E = trasEsc, av = pedAvance(p), ed = p.estado === 'proc' || p.estado === 'prep';
+  let h = '<div style="border-top:1px solid #21262d;padding-top:8px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:#e6edf3;margin-bottom:6px">📦 Bultos del pedido · avance <span style="color:' + (av.pct >= 100 && !av.sobra ? '#3fb950' : '#d29922') + '">' + av.pct + '%</span> (' + av.ok + '/' + av.pid + ' uni.)</div>'
+    + '<div style="height:6px;background:#21262d;border-radius:4px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:' + Math.min(100, av.pct) + '%;background:' + (av.pct >= 100 ? '#3fb950' : '#58a6ff') + '"></div></div>';
+  if (ed) h += '<div style="display:flex;gap:6px;margin-bottom:8px"><div class="sbox" style="flex:1;margin:0"><span class="sico">📦</span><input id="ped-lig-' + p.id + '" type="text" placeholder="Escanear / digitar código de bulto" autocomplete="off" onkeydown="if(event.key===\'Enter\'){event.preventDefault();pedLigar(\'' + p.id + '\')}"/></div><button type="button" class="mod-confirm-btn" style="margin:0;width:auto;padding:0 14px" onclick="pedLigar(\'' + p.id + '\')">🔗 Enlazar</button></div>';
+  const bl = p.bultos || [];
+  h += bl.length ? bl.map(function(bid) {
+    const b = bulGet(bid), u = b ? b.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0) : 0;
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:12px;padding:5px 8px;border:1px solid #21262d;border-radius:8px;margin-bottom:4px"><span>' + (b ? bulIcono(b) : '❔') + ' <b style="color:#58a6ff">' + E(bid) + '</b>' + (b && b.consec ? ' <span style="color:#8b949e">· ' + E(consecNombre(b.fecha, b.consec)) + '</span>' : '') + (b ? ' <span style="color:#8b949e">· ' + u + ' uni.</span>' : ' <span style="color:#d29922">· aún no llega a este equipo</span>') + '</span><span style="white-space:nowrap">' + (b ? '<button type="button" class="xbtn2" style="display:inline-block" title="Abrir ficha" onclick="bulAbrirDesdeConsec(\'' + bid + '\')">📦</button> ' : '') + (ed ? '<button type="button" class="xbtn2" style="display:inline-block" onclick="pedDesligar(\'' + p.id + '\',\'' + bid + '\')">✕</button>' : '') + '</span></div>';
+  }).join('') : '<div style="font-size:12px;color:#7d8590">Aún no hay bultos enlazados.</div>';
+  return h + '</div>';
+}
 function pedRender() {
   const box = document.getElementById('ped-lista'); if (!box) return;
   const E = trasEsc, d1 = document.getElementById('ped-desde').value, d2 = document.getElementById('ped-hasta').value, q = String(document.getElementById('ped-buscar').value || '').trim().toUpperCase();
@@ -9463,9 +9505,10 @@ function pedRender() {
     const es = PED_EST[p.estado] || PED_EST.proc, ab = !!PED_EXP[p.id], u = p.items.reduce(function(a, it) { return a + (parseInt(it.cantidad, 10) || 0); }, 0), hora = new Date(p.ts).toLocaleString('es-CL');
     let h = '<div style="border:1px solid #30363d;border-radius:10px;background:#0d1117;margin-bottom:8px"><div onclick="pedToggle(\'' + p.id + '\')" style="cursor:pointer;padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800;color:#58a6ff;font-size:14px">📋 ' + E(p.id) + '</div><span style="font-size:11px;font-weight:700;color:' + es[1] + ';border:1px solid ' + es[1] + ';border-radius:20px;padding:2px 10px">' + es[0] + '</span></div>'
       + (p.cliente ? '<div style="font-size:13px;color:#e6edf3;margin-top:3px">' + E(p.cliente) + '</div>' : '')
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:11px;color:#8b949e"><span>🕐 ' + E(hora) + ' · 👤 ' + E(p.user || '—') + '</span><span><b style="color:#e6edf3">' + p.items.length + '</b> art. · <b style="color:#3fb950">' + u + '</b> uni. ' + (ab ? '&#9652;' : '&#9662;') + '</span></div></div>';
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:11px;color:#8b949e"><span>🕐 ' + E(hora) + ' · 👤 ' + E(p.user || '—') + '</span><span><b style="color:#e6edf3">' + p.items.length + '</b> art. · <b style="color:#3fb950">' + u + '</b> uni.' + ((p.bultos || []).length ? ' · 📦 ' + p.bultos.length : '') + ' ' + (ab ? '&#9652;' : '&#9662;') + '</span></div></div>';
+    const av0 = ab ? pedAvance(p) : null;
     if (ab) {
-      h += '<div style="padding:0 12px 10px;display:flex;flex-direction:column;gap:6px">' + p.items.map(function(it) { return '<div class="hist-item"><div class="hist-item-name">' + E(it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + E(it.cod) + '</b> · Cantidad: <b style="color:#3fb950">' + E(it.cantidad) + '</b></div></div>'; }).join('')
+      h += '<div style="padding:0 12px 10px;display:flex;flex-direction:column;gap:6px">' + p.items.map(function(it) { const n = parseInt(it.cantidad, 10) || 0, hh = av0.m[it.cod] || 0, c = hh === n ? '#3fb950' : (hh > n ? '#f85149' : '#d29922'); return '<div class="hist-item"><div class="hist-item-name">' + E(it.desc) + '</div><div class="hist-item-sub">Código: <b style="color:#e6edf3">' + E(it.cod) + '</b> · Pedido: <b style="color:#e6edf3">' + n + '</b> · En bultos: <b style="color:' + c + '">' + hh + '</b>' + (hh === n ? ' ✔' : (hh > n ? ' (sobra ' + (hh - n) + ')' : ' (faltan ' + (n - hh) + ')')) + '</div></div>'; }).join('') + pedBultosHtml(p)
         + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">'
         + (p.estado === 'proc' || p.estado === 'prep' ? '<button type="button" class="mod-confirm-btn" style="margin:0;flex:1" onclick="pedPreparar(\'' + p.id + '\')">' + (p.estado === 'proc' ? '▶ Preparar' : '▶ Continuar') + '</button>' : '')
         + (p.estado === 'prep' ? '<button type="button" class="mod-back-btn" style="margin:0;flex:1" onclick="pedEstado(\'' + p.id + '\',\'term\')">✔ Terminado</button>' : '')
