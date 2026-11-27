@@ -91,7 +91,7 @@
     if (!uInp) return; uInp.focus(); uInp.value = it.ub;
     evt(uInp, 'input'); evt(uInp, 'change'); evt(uInp, 'keydown', 13); evt(uInp, 'keypress', 13); evt(uInp, 'keyup', 13);
     ultCod = it.cod + it.ub; ultFill = new Date().getTime();
-    pitar('ubi'); hablar(limpiaDes(it.des));
+    hablar(limpiaDes(it.des));
     setTimeout(function () { var r = buscarInputs(); if (r.p) { try { r.p.focus(); } catch (e) {} } }, 250);
   }
   // ---- Rotación mensual (la misma de la app de bodega, en Firebase): cada persona prioriza SU zona ----
