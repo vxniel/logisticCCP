@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Picking asistido Dimerc CCP
 // @namespace    dimerc-ccp
-// @version      1.1
+// @version      1.2
 // @description  Pone sola la ubicacion del siguiente producto (zona PB/FV/F) en la preparacion
 // @match        http://10.10.180.248/*
 // @run-at       document-end
@@ -79,7 +79,13 @@
     info = document.createElement('div'); info.style.cssText = 'flex:1 1 100%;margin-top:3px;line-height:1.25'; barra.appendChild(info);
     document.body.appendChild(barra);
   }
+  function sinMemoria() {
+    var ins = document.getElementsByTagName('input'), i, f = document.getElementsByTagName('form');
+    for (i = 0; i < f.length; i++) { if (f[i].getAttribute('autocomplete') !== 'off') f[i].setAttribute('autocomplete', 'off'); }
+    for (i = 0; i < ins.length; i++) { if (ins[i].type !== 'password' && ins[i].getAttribute('autocomplete') !== 'off') { ins[i].setAttribute('autocomplete', 'off'); ins[i].setAttribute('autocorrect', 'off'); ins[i].setAttribute('autocapitalize', 'off'); ins[i].setAttribute('spellcheck', 'false'); } }
+  }
   function tick() {
+    sinMemoria();
     var r = buscarInputs(); uInp = r.u; pInp = r.p; var f = leerFilas(); if (f.length) items = f;
     var body = (document.body.innerText || ''), msg = /PIQUEADO\.\./i.test(body) && !/BULTO PIQUEADO/i.test(body);
     if (msg && !vioMsg) { vioMsg = true; var p0 = pendientes()[0]; if (p0 && ultCod === p0.cod + p0.ub) { hechos[p0.cod + p0.ub] = 1; ultCod = ''; } }
