@@ -20,15 +20,15 @@
     }
     return { u: u, p: p };
   }
-  var RE_UBI = /^[A-Z]{1,3}(-[0-9A-Z]{1,3}){3,8}$/;
+  var RE_UBI = /^[A-Za-z]{1,3}(-[0-9A-Za-z]{1,3}){3,8}$/;
   function leerFilas() {
     var rows = document.getElementsByTagName('tr'), out = [], seen = {}, i, j;
     for (i = 0; i < rows.length; i++) {
       var tds = rows[i].children, ub = '', cod = '', des = '';
       if (!tds || tds.length < 2 || rows[i].getElementsByTagName('table').length) continue;
       for (j = 0; j < tds.length; j++) {
-        var s = txt(tds[j]);
-        if (!ub && RE_UBI.test(s)) ub = s; else if (!cod && /^[A-Z]?[0-9]{5,8}$/.test(s)) cod = s; else if (s.length > 6 && !des) des = s;
+        var s = txt(tds[j]), sc = s.replace(/\s+/g, '');
+        if (!ub && RE_UBI.test(sc)) ub = sc; else if (!cod && /^[A-Za-z]?[0-9]{5,8}$/.test(sc)) cod = sc; else if (s.length > 6 && !des) des = s;
       }
       if (ub && cod && !seen[cod + ub]) { seen[cod + ub] = 1; out.push({ cod: cod, ub: ub, des: des }); }
     }
@@ -36,7 +36,7 @@
   }
   function filtrar(l) {
     var z = cfg.zona, r = [], i;
-    for (i = 0; i < l.length; i++) { if (z === '*' || l[i].ub.indexOf(z + '-') === 0) r.push(l[i]); }
+    for (i = 0; i < l.length; i++) { if (z === '*' || l[i].ub.toUpperCase().indexOf(z + '-') === 0) r.push(l[i]); }
     if (cfg.orden === 'ubic') r.sort(function (a, b) { return a.ub < b.ub ? -1 : (a.ub > b.ub ? 1 : 0); });
     return r;
   }
