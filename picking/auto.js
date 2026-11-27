@@ -6,7 +6,7 @@
   var K = 'dimerc_pk_cfg';
   function cfgGet() { try { return JSON.parse(localStorage.getItem(K) || '{}'); } catch (e) { return {}; } }
   function cfgSet(c) { try { localStorage.setItem(K, JSON.stringify(c)); } catch (e) {} }
-  var cfg = cfgGet(); if (!cfg.zona) cfg.zona = '*'; if (!cfg.modo) cfg.modo = 'auto'; if (cfg.auto === undefined) cfg.auto = true; if (!cfg.orden) cfg.orden = 'lista'; if (!cfg.estr) cfg.estr = { PB: '22-29', FV: '1-8', F: '11-14' };
+  var cfg = cfgGet(); if (!cfg.zona) cfg.zona = '*'; if (!cfg.modo) cfg.modo = 'auto'; if (cfg.auto === undefined) cfg.auto = true; if (!cfg.orden) cfg.orden = 'lista'; if (cfg.voz === undefined) cfg.voz = true; if (!cfg.estr) cfg.estr = { PB: '22-29', FV: '1-8', F: '11-14' };
   var hechos = {}, idx = 0, ultCod = '', ultFill = 0, vioMsg = false, items = [], uInp = null, pInp = null;
 
   function vis(el) { return !!(el && el.offsetWidth && el.offsetHeight); }
@@ -41,11 +41,40 @@
     return r;
   }
   function pendientes() { var f = filtrar(items), r = [], i; for (i = 0; i < f.length; i++) { if (!hechos[f[i].cod + f[i].ub]) r.push(f[i]); } return r; }
+
+  // ---- Voz (speechSynthesis, como el asistente de la app) ----
+  var vozOk = false, vozLista = null;
+  function elegirVoz() {
+    try {
+      var vs = window.speechSynthesis.getVoices() || [], pref = ['es-CL', 'es-MX', 'es-US', 'es-419', 'es-ES'], i, j;
+      for (j = 0; j < pref.length; j++) { for (i = 0; i < vs.length; i++) { if ((vs[i].lang || '').replace('_', '-').toLowerCase() === pref[j].toLowerCase()) return vs[i]; } }
+      for (i = 0; i < vs.length; i++) { if (/^es/i.test(vs[i].lang || '')) return vs[i]; }
+    } catch (e) {}
+    return null;
+  }
+  function hablar(t) {
+    if (!cfg.voz || !t) return;
+    try {
+      var ss = window.speechSynthesis; if (!ss || !window.SpeechSynthesisUtterance) return;
+      var u = new SpeechSynthesisUtterance(String(t)), v = elegirVoz(); u.lang = v ? v.lang : 'es-CL'; if (v) u.voice = v; u.rate = 1; u.volume = 1;
+      try { ss.cancel(); } catch (e) {} ss.speak(u);
+    } catch (e) {}
+  }
+  function activarVoz() { if (vozOk) return; vozOk = true; try { var u = new SpeechSynthesisUtterance(' '); u.volume = 0; window.speechSynthesis.speak(u); } catch (e) {} }
+  try { document.addEventListener('click', activarVoz, true); document.addEventListener('touchstart', activarVoz, true); if (window.speechSynthesis) window.speechSynthesis.getVoices(); } catch (e) {}
+  function limpiaDes(d) { return String(d || '').replace(/[_*#\/]+/g, ' ').replace(/(\d),(\d)/g, '$1 coma $2').replace(/\s+/g, ' ').trim(); }
+  var enCant = false;
+  function pantallaCantidad(body) {
+    if (!(/Digitaci[oó]n/i.test(body) && /Cantidad/i.test(body))) return 0;
+    var m = body.match(/Cantidad(?!\s*(SKU|Total))\s*:?\s*\n?\s*(\d+(?:[.,]\d+)?)/i);
+    return m ? m[2] : 0;
+  }
   function evt(el, tipo, kc) { var e; try { e = document.createEvent('Event'); e.initEvent(tipo, true, true); if (kc) { e.keyCode = kc; e.which = kc; e.key = 'Enter'; } el.dispatchEvent(e); } catch (x) {} }
   function llenar(it) {
     if (!uInp) return; uInp.focus(); uInp.value = it.ub;
     evt(uInp, 'input'); evt(uInp, 'change'); evt(uInp, 'keydown', 13); evt(uInp, 'keypress', 13); evt(uInp, 'keyup', 13);
     ultCod = it.cod + it.ub; ultFill = new Date().getTime();
+    hablar(limpiaDes(it.des));
     setTimeout(function () { var r = buscarInputs(); if (r.p) { try { r.p.focus(); } catch (e) {} } }, 250);
   }
   // ---- Rotación mensual (la misma de la app de bodega, en Firebase): cada persona prioriza SU zona ----
@@ -120,6 +149,7 @@
     b = bt('🎯'); b.title = 'Mi zona de la rotación primero'; b.setAttribute('data-m', '1'); b.onclick = function () { cfg.modo = 'auto'; cfgSet(cfg); estVisto = false; ultCod = ''; pintar(); }; barra.appendChild(b);
     b = bt('👤'); b.title = '¿Quién eres?'; b.onclick = function () { var t = 'Elige quién eres (número):\n', i, v; for (i = 0; i < NOMBRES.length; i++) { t += (i + 1) + ') ' + NOMBRES[i] + '\n'; } t += 'Actual: ' + (cfg.yo || '—') + (miZona() ? ' → zona ' + miZona() : ''); v = prompt(t, ''); if (v === null || v === '') return; i = parseInt(v, 10); if (i >= 1 && i <= NOMBRES.length) { cfg.yo = NOMBRES[i - 1]; cfgSet(cfg); estVisto = false; pintar(); alert('Listo: ' + cfg.yo + (miZona() ? ' · zona ' + miZona() : ' · sin zona este mes')); } }; barra.appendChild(b);
     b = bt('🏭'); b.title = 'Estación de esta zona'; b.onclick = function () { if (cfg.zona === '*') { alert('Elige PB, FV o F primero.'); return; } var v = prompt('Estaciones de ' + cfg.zona + ' (ej: 22-29 o 7,11):', cfg.estr[cfg.zona] || ''); if (v !== null) { cfg.estr[cfg.zona] = String(v).replace(/\s+/g, ''); cfgSet(cfg); estVisto = false; pintar(); } }; barra.appendChild(b);
+    b = bt(cfg.voz ? '🔊' : '🔇'); b.title = 'Voz'; b.onclick = function () { cfg.voz = !cfg.voz; cfgSet(cfg); this.textContent = cfg.voz ? '🔊' : '🔇'; activarVoz(); if (cfg.voz) hablar('Voz activada'); }; barra.appendChild(b);
     b = bt('?'); b.title = 'Diagnóstico'; b.onclick = function () { var r = buscarInputs(); alert('Campo ubicación: ' + (r.u ? 'OK' : 'NO') + '\nCampo producto: ' + (r.p ? 'OK' : 'NO') + '\nFilas leídas: ' + items.length + '\nZona: ' + cfg.zona + ' (' + filtrar(items).length + ')\nPendientes: ' + pendientes().length + (items[0] ? '\nEj.: ' + items[0].cod + ' ' + items[0].ub : '')); }; barra.appendChild(b);
     b = bt('✕'); b.onclick = function () { barra.style.display = 'none'; }; barra.appendChild(b);
     info = document.createElement('div'); info.style.cssText = 'flex:1 1 100%;margin-top:3px;line-height:1.25'; barra.appendChild(info);
@@ -141,6 +171,7 @@
     if (msg && !vioMsg) { vioMsg = true; var p0 = pendientes()[0]; if (p0 && ultCod === p0.cod + p0.ub) { hechos[p0.cod + p0.ub] = 1; ultCod = ''; } }
     if (!msg) vioMsg = false;
     var dlg = /OK!|PIQUEADO|swal2?-/i.test(body) && (document.querySelector('.swal2-container,.sweet-alert,.swal-overlay,.modal.in,.modal.show') !== null);
+    var cq = pantallaCantidad(body); if (cq && !enCant) { enCant = true; hablar('Cantidad ' + String(cq).replace(',', ' coma ')); } if (!cq) enCant = false;
     var sig = pendientes()[0];
     if (cfg.auto && !sel && uInp && sig && !dlg && !uInp.value && (ultCod !== sig.cod + sig.ub || new Date().getTime() - ultFill > 6000)) llenar(sig);
     pintar();
