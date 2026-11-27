@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Picking asistido Dimerc CCP
 // @namespace    dimerc-ccp
-// @version      1.3
-// @description  Elige la estacion de la zona y pone sola la ubicacion del siguiente producto (PB/FV/F)
+// @version      1.4
+// @description  Abre la estacion de la zona (segun Excel: PB 22-29, FV 1-8, F 11-14) y pone sola la ubicacion
 // @match        http://10.10.180.248/*
 // @run-at       document-end
 // @grant        none
@@ -15,7 +15,7 @@
   var K = 'dimerc_pk_cfg';
   function cfgGet() { try { return JSON.parse(localStorage.getItem(K) || '{}'); } catch (e) { return {}; } }
   function cfgSet(c) { try { localStorage.setItem(K, JSON.stringify(c)); } catch (e) {} }
-  var cfg = cfgGet(); if (!cfg.zona) cfg.zona = 'F'; if (cfg.auto === undefined) cfg.auto = true; if (!cfg.orden) cfg.orden = 'lista'; if (!cfg.est) cfg.est = { FV: '7', F: '13' };
+  var cfg = cfgGet(); if (!cfg.zona) cfg.zona = '*'; if (cfg.auto === undefined) cfg.auto = true; if (!cfg.orden) cfg.orden = 'lista'; if (!cfg.estr) cfg.estr = { PB: '22-29', FV: '1-8', F: '11-14' };
   var hechos = {}, idx = 0, ultCod = '', ultFill = 0, vioMsg = false, items = [], uInp = null, pInp = null;
 
   function vis(el) { return !!(el && el.offsetWidth && el.offsetHeight); }
@@ -58,20 +58,26 @@
     setTimeout(function () { var r = buscarInputs(); if (r.p) { try { r.p.focus(); } catch (e) {} } }, 250);
   }
   var estVisto = false, estZona = '', selPrev = false;
-  function filaEstacion(n) {
+  function enRango(n, spec) {
+    var p = String(spec || '').split(','), i, m, a, b; n = parseInt(n, 10);
+    for (i = 0; i < p.length; i++) { m = /^\s*(\d+)\s*(?:-\s*(\d+))?\s*$/.exec(p[i]); if (!m) continue; a = parseInt(m[1], 10); b = m[2] ? parseInt(m[2], 10) : a; if (n >= a && n <= b) return true; }
+    return false;
+  }
+  function filaEstacion(spec) {
     var rows = document.getElementsByTagName('tr'), i, c;
-    for (i = 0; i < rows.length; i++) { c = rows[i].children; if (c && c.length >= 2 && vis(rows[i]) && txt(c[0]) === String(n) && /^[0-9]+$/.test(txt(c[1])) && !rows[i].getElementsByTagName('table').length) return rows[i]; }
+    for (i = 0; i < rows.length; i++) { c = rows[i].children; if (c && c.length >= 2 && vis(rows[i]) && /^[0-9]{1,3}$/.test(txt(c[0])) && /^[0-9]+$/.test(txt(c[1])) && !rows[i].getElementsByTagName('table').length && enRango(txt(c[0]), spec)) return rows[i]; }
     return null;
   }
   function enSeleccionEstacion() { var b = document.body.innerText || ''; return /seleccione la estaci/i.test(b); }
   function autoEstacion() {
-    var on = enSeleccionEstacion();
-    if (!on) { estVisto = false; return ''; }
-    var n = cfg.est[cfg.zona];
-    if (cfg.zona === '*' || !n) return cfg.zona === '*' ? '' : 'Zona ' + cfg.zona + ': toca 🏭 para fijar su estación';
-    var r = filaEstacion(n);
-    if (!r) return 'Estación ' + n + ' no está en la lista';
-    if (cfg.auto && !(estVisto && estZona === cfg.zona)) { estVisto = true; estZona = cfg.zona; var c = r.children[0]; try { c.click(); } catch (e) {} }
+    if (!enSeleccionEstacion()) { estVisto = false; return ''; }
+    var spec = cfg.estr[cfg.zona];
+    if (cfg.zona === '*') return '';
+    if (!spec) return 'Zona ' + cfg.zona + ': toca 🏭 para fijar sus estaciones';
+    var r = filaEstacion(spec);
+    if (!r) return 'Sin estaciones de ' + cfg.zona + ' (' + spec + ') en la lista';
+    var n = txt(r.children[0]);
+    if (cfg.auto && !(estVisto && estZona === cfg.zona)) { estVisto = true; estZona = cfg.zona; try { r.children[0].click(); } catch (e) {} }
     return 'Abriendo estación ' + n + ' (' + cfg.zona + ')';
   }
   var barra, info, msgEst = '';
@@ -92,7 +98,7 @@
     b = bt('⏭'); b.title = 'Saltar este producto'; b.onclick = function () { var p = pendientes()[0]; if (p) { hechos[p.cod + p.ub] = 1; ultCod = ''; var s = pendientes()[0]; if (s && cfg.auto) llenar(s); pintar(); } }; barra.appendChild(b);
     b = bt('↺'); b.title = 'Reiniciar lista'; b.onclick = function () { hechos = {}; ultCod = ''; pintar(); }; barra.appendChild(b);
     b = bt('↕'); b.title = 'Orden: lista / ubicación'; b.onclick = function () { cfg.orden = cfg.orden === 'lista' ? 'ubic' : 'lista'; cfgSet(cfg); ultCod = ''; alert('Orden: ' + (cfg.orden === 'lista' ? 'como sale en la lista (arriba→abajo)' : 'por ubicación (A→Z)')); pintar(); }; barra.appendChild(b);
-    b = bt('🏭'); b.title = 'Estación de esta zona'; b.onclick = function () { if (cfg.zona === '*') { alert('Elige PB, FV o F primero.'); return; } var v = prompt('Número de estación para ' + cfg.zona + ':', cfg.est[cfg.zona] || ''); if (v !== null) { cfg.est[cfg.zona] = String(v).replace(/\s+/g, ''); cfgSet(cfg); estVisto = false; pintar(); } }; barra.appendChild(b);
+    b = bt('🏭'); b.title = 'Estación de esta zona'; b.onclick = function () { if (cfg.zona === '*') { alert('Elige PB, FV o F primero.'); return; } var v = prompt('Estaciones de ' + cfg.zona + ' (ej: 22-29 o 7,11):', cfg.estr[cfg.zona] || ''); if (v !== null) { cfg.estr[cfg.zona] = String(v).replace(/\s+/g, ''); cfgSet(cfg); estVisto = false; pintar(); } }; barra.appendChild(b);
     b = bt('?'); b.title = 'Diagnóstico'; b.onclick = function () { var r = buscarInputs(); alert('Campo ubicación: ' + (r.u ? 'OK' : 'NO') + '\nCampo producto: ' + (r.p ? 'OK' : 'NO') + '\nFilas leídas: ' + items.length + '\nZona: ' + cfg.zona + ' (' + filtrar(items).length + ')\nPendientes: ' + pendientes().length + (items[0] ? '\nEj.: ' + items[0].cod + ' ' + items[0].ub : '')); }; barra.appendChild(b);
     b = bt('✕'); b.onclick = function () { barra.style.display = 'none'; }; barra.appendChild(b);
     info = document.createElement('div'); info.style.cssText = 'flex:1 1 100%;margin-top:3px;line-height:1.25'; barra.appendChild(info);
