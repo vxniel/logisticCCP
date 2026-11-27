@@ -6,7 +6,7 @@
   var K = 'dimerc_pk_cfg';
   function cfgGet() { try { return JSON.parse(localStorage.getItem(K) || '{}'); } catch (e) { return {}; } }
   function cfgSet(c) { try { localStorage.setItem(K, JSON.stringify(c)); } catch (e) {} }
-  var cfg = cfgGet(); if (!cfg.zona) cfg.zona = '*'; if (cfg.auto === undefined) cfg.auto = true; if (!cfg.orden) cfg.orden = 'lista'; if (!cfg.estr) cfg.estr = { PB: '22-29', FV: '1-8', F: '11-14' };
+  var cfg = cfgGet(); if (!cfg.zona) cfg.zona = '*'; if (!cfg.modo) cfg.modo = 'auto'; if (cfg.auto === undefined) cfg.auto = true; if (!cfg.orden) cfg.orden = 'lista'; if (!cfg.estr) cfg.estr = { PB: '22-29', FV: '1-8', F: '11-14' };
   var hechos = {}, idx = 0, ultCod = '', ultFill = 0, vioMsg = false, items = [], uInp = null, pInp = null;
 
   function vis(el) { return !!(el && el.offsetWidth && el.offsetHeight); }
@@ -35,7 +35,7 @@
     return out;
   }
   function filtrar(l) {
-    var z = cfg.zona, r = [], i;
+    var z = cfg.modo === 'auto' ? '*' : cfg.zona, r = [], i;
     for (i = 0; i < l.length; i++) { if (z === '*' || l[i].ub.toUpperCase().indexOf(z + '-') === 0) r.push(l[i]); }
     if (cfg.orden === 'ubic') r.sort(function (a, b) { return a.ub < b.ub ? -1 : (a.ub > b.ub ? 1 : 0); });
     return r;
@@ -48,6 +48,27 @@
     ultCod = it.cod + it.ub; ultFill = new Date().getTime();
     setTimeout(function () { var r = buscarInputs(); if (r.p) { try { r.p.focus(); } catch (e) {} } }, 250);
   }
+  // ---- Rotación mensual (la misma de la app de bodega, en Firebase): cada persona prioriza SU zona ----
+  var NOMBRES = ['VICTOR URRA', 'IAN FIERRO', 'APOYO', 'JUAN PABLO'], ORD = ['F', 'FV', 'PB', 'VA'];
+  function mesKey() { var d = new Date(), m = d.getMonth() + 1; return d.getFullYear() + '-' + (m < 10 ? '0' + m : m); }
+  function sugerida(key) {
+    var a = { F: 'VICTOR URRA', FV: 'IAN FIERRO', PB: 'APOYO', VA: 'JUAN PABLO' }, p = key.split('-'), diff = (parseInt(p[0], 10) - 2026) * 12 + (parseInt(p[1], 10) - 9), i, n, k;
+    for (k = 0; k < Math.abs(diff); k++) { n = {}; for (i = 0; i < 4; i++) { n[ORD[i]] = a[ORD[(diff > 0 ? i + 1 : i + 3) % 4]]; } a = n; }
+    return a;
+  }
+  function normN(t) { return String(t || '').toUpperCase().replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, ''); }
+  function miZona() {
+    if (!cfg.yo) return '';
+    var asg = (cfg.rot && cfg.rot[mesKey()]) || sugerida(mesKey()), z, yo = normN(cfg.yo);
+    for (z in asg) { if (normN(asg[z]) === yo) return z; }
+    return '';
+  }
+  function cargarRot() {
+    try { var x = new XMLHttpRequest(); x.open('GET', 'https://app-bodega-dimerc-default-rtdb.firebaseio.com/rotacion.json'); x.timeout = 8000;
+      x.onload = function () { try { var j = JSON.parse(x.responseText); if (j && typeof j === 'object') { cfg.rot = j; cfgSet(cfg); } } catch (e) {} };
+      x.send(); } catch (e) {}
+  }
+  function ordenZonas() { var m = miZona(), r = m ? [m] : [], o = ['F', 'FV', 'PB'], i; for (i = 0; i < o.length; i++) { if (o[i] !== m) r.push(o[i]); } return r; }
   var estVisto = false, estZona = '', selPrev = false;
   function enRango(n, spec) {
     var p = String(spec || '').split(','), i, m, a, b; n = parseInt(n, 10);
@@ -62,19 +83,26 @@
   function enSeleccionEstacion() { var b = document.body.innerText || ''; return /seleccione la estaci/i.test(b); }
   function autoEstacion() {
     if (!enSeleccionEstacion()) { estVisto = false; return ''; }
-    var spec = cfg.estr[cfg.zona];
-    if (cfg.zona === '*') return '';
-    if (!spec) return 'Zona ' + cfg.zona + ': toca 🏭 para fijar sus estaciones';
-    var r = filaEstacion(spec);
-    if (!r) return 'Sin estaciones de ' + cfg.zona + ' (' + spec + ') en la lista';
-    var n = txt(r.children[0]);
-    if (cfg.auto && !(estVisto && estZona === cfg.zona)) { estVisto = true; estZona = cfg.zona; try { r.children[0].click(); } catch (e) {} }
-    return 'Abriendo estación ' + n + ' (' + cfg.zona + ')';
+    var zs, k, z, spec, r, n;
+    if (cfg.modo === 'auto') {
+      if (!cfg.yo) return 'Toca 👤 para elegir quién eres (y usar tu zona de la rotación)';
+      zs = ordenZonas();
+    } else { if (cfg.zona === '*') return ''; zs = [cfg.zona]; }
+    for (k = 0; k < zs.length; k++) {
+      z = zs[k]; spec = cfg.estr[z]; if (!spec) continue; r = filaEstacion(spec);
+      if (r) {
+        n = txt(r.children[0]);
+        if (cfg.auto && !(estVisto && estZona === z)) { estVisto = true; estZona = z; try { r.children[0].click(); } catch (e) {} }
+        return 'Abriendo estación ' + n + ' (' + z + (cfg.modo === 'auto' && z === miZona() ? ' · tu zona' : '') + ')';
+      }
+    }
+    return 'Sin estaciones de ' + zs.join('/') + ' en la lista';
   }
   var barra, info, msgEst = '';
   function pintar() {
     var pend = pendientes(), tot = filtrar(items).length, sig = pend[0];
-    var b = barra.getElementsByTagName('button'), i; for (i = 0; i < b.length; i++) { var z = b[i].getAttribute('data-z'); if (z) { b[i].style.background = (z === cfg.zona) ? '#16a34a' : '#374151'; } }
+    var b = barra.getElementsByTagName('button'), i; for (i = 0; i < b.length; i++) { var z = b[i].getAttribute('data-z'); if (z) { b[i].style.background = (cfg.modo === 'man' && z === cfg.zona) ? '#16a34a' : '#374151'; } }
+    barra.querySelector('[data-m]').style.background = cfg.modo === 'auto' ? '#16a34a' : '#374151';
     barra.querySelector('[data-a]').style.background = cfg.auto ? '#16a34a' : '#b91c1c'; barra.querySelector('[data-a]').textContent = cfg.auto ? 'AUTO' : 'OFF';
     if (msgEst) { info.innerHTML = '<b>' + msgEst + '</b>'; return; }
     info.innerHTML = sig ? ('<b>' + (tot - pend.length + 1) + '/' + tot + '</b> ' + sig.ub + ' · ' + sig.cod + '<br><span style="opacity:.75">' + (sig.des || '').substr(0, 38) + '</span>') : (tot ? '✔ Zona ' + cfg.zona + ' lista (' + tot + ')' : 'Sin filas para ' + cfg.zona + ' (' + items.length + ' en pantalla)');
@@ -84,11 +112,13 @@
     barra = document.createElement('div'); barra.id = 'pk-barra';
     barra.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:#111827;color:#fff;font:12px Arial;padding:5px;border-top:2px solid #16a34a;display:flex;align-items:center;flex-wrap:wrap';
     var zs = [['PB', 'PB'], ['FV', 'FV'], ['F', 'F'], ['Todas', '*']], i, b;
-    for (i = 0; i < zs.length; i++) { b = bt(zs[i][0], null, zs[i][1]); (function (z) { b.onclick = function () { cfg.zona = z; cfgSet(cfg); idx = 0; ultCod = ''; pintar(); }; })(zs[i][1]); barra.appendChild(b); }
+    for (i = 0; i < zs.length; i++) { b = bt(zs[i][0], null, zs[i][1]); (function (z) { b.onclick = function () { cfg.zona = z; cfg.modo = 'man'; cfgSet(cfg); idx = 0; ultCod = ''; pintar(); }; })(zs[i][1]); barra.appendChild(b); }
     b = bt('AUTO', 'auto'); b.onclick = function () { cfg.auto = !cfg.auto; cfgSet(cfg); ultCod = ''; pintar(); }; barra.appendChild(b);
     b = bt('⏭'); b.title = 'Saltar este producto'; b.onclick = function () { var p = pendientes()[0]; if (p) { hechos[p.cod + p.ub] = 1; ultCod = ''; var s = pendientes()[0]; if (s && cfg.auto) llenar(s); pintar(); } }; barra.appendChild(b);
     b = bt('↺'); b.title = 'Reiniciar lista'; b.onclick = function () { hechos = {}; ultCod = ''; pintar(); }; barra.appendChild(b);
     b = bt('↕'); b.title = 'Orden: lista / ubicación'; b.onclick = function () { cfg.orden = cfg.orden === 'lista' ? 'ubic' : 'lista'; cfgSet(cfg); ultCod = ''; alert('Orden: ' + (cfg.orden === 'lista' ? 'como sale en la lista (arriba→abajo)' : 'por ubicación (A→Z)')); pintar(); }; barra.appendChild(b);
+    b = bt('🎯'); b.title = 'Mi zona de la rotación primero'; b.setAttribute('data-m', '1'); b.onclick = function () { cfg.modo = 'auto'; cfgSet(cfg); estVisto = false; ultCod = ''; pintar(); }; barra.appendChild(b);
+    b = bt('👤'); b.title = '¿Quién eres?'; b.onclick = function () { var t = 'Elige quién eres (número):\n', i, v; for (i = 0; i < NOMBRES.length; i++) { t += (i + 1) + ') ' + NOMBRES[i] + '\n'; } t += 'Actual: ' + (cfg.yo || '—') + (miZona() ? ' → zona ' + miZona() : ''); v = prompt(t, ''); if (v === null || v === '') return; i = parseInt(v, 10); if (i >= 1 && i <= NOMBRES.length) { cfg.yo = NOMBRES[i - 1]; cfgSet(cfg); estVisto = false; pintar(); alert('Listo: ' + cfg.yo + (miZona() ? ' · zona ' + miZona() : ' · sin zona este mes')); } }; barra.appendChild(b);
     b = bt('🏭'); b.title = 'Estación de esta zona'; b.onclick = function () { if (cfg.zona === '*') { alert('Elige PB, FV o F primero.'); return; } var v = prompt('Estaciones de ' + cfg.zona + ' (ej: 22-29 o 7,11):', cfg.estr[cfg.zona] || ''); if (v !== null) { cfg.estr[cfg.zona] = String(v).replace(/\s+/g, ''); cfgSet(cfg); estVisto = false; pintar(); } }; barra.appendChild(b);
     b = bt('?'); b.title = 'Diagnóstico'; b.onclick = function () { var r = buscarInputs(); alert('Campo ubicación: ' + (r.u ? 'OK' : 'NO') + '\nCampo producto: ' + (r.p ? 'OK' : 'NO') + '\nFilas leídas: ' + items.length + '\nZona: ' + cfg.zona + ' (' + filtrar(items).length + ')\nPendientes: ' + pendientes().length + (items[0] ? '\nEj.: ' + items[0].cod + ' ' + items[0].ub : '')); }; barra.appendChild(b);
     b = bt('✕'); b.onclick = function () { barra.style.display = 'none'; }; barra.appendChild(b);
@@ -115,6 +145,6 @@
     if (cfg.auto && !sel && uInp && sig && !dlg && !uInp.value && (ultCod !== sig.cod + sig.ub || new Date().getTime() - ultFill > 6000)) llenar(sig);
     pintar();
   }
-  montar(); tick(); setInterval(tick, 800);
+  montar(); cargarRot(); tick(); setInterval(tick, 800); setInterval(cargarRot, 600000);
   window.__pkAuto = { mostrar: function () { barra.style.display = 'flex'; } };
 })();
