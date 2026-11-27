@@ -3853,7 +3853,11 @@ function consecHoyKey() { const d = getOfficialNow(); return histYMD(d); }
 function consecFmtFecha(k) { const [y,m,d] = String(k).split('-'); return d + '/' + m + '/' + String(y).slice(2); }
 function consecNombre(k, n) { return 'Consecutivo ' + consecFmtFecha(k) + ' (' + n + ')'; }
 function consecYo() { return String(window._loggedUser || '').trim().toUpperCase(); }
+// Modo lote (al reproducir muchos eventos seguidos): consecutivos y bultos se leen/guardan en memoria y se escriben una sola vez por tanda
+let _CBM = null;
+function cbmFlush() { const m = _CBM; _CBM = null; if (!m) return; try { if (m.cd && m.c) localStorage.setItem('dimerc_consec', JSON.stringify(m.c)); if (m.bd && m.b) localStorage.setItem('dimerc_bultos', JSON.stringify(m.b)); } catch(e) {} if (m.cd || m.bd) sincPestanasProg(); }
 function consecAll() {
+  if (_CBM && _CBM.c) return _CBM.c;
   let all; try { all = JSON.parse(localStorage.getItem('dimerc_consec') || '[]'); } catch(e) { all = []; }
   let cambio = false;
   all.forEach(function(it) {
@@ -3864,9 +3868,10 @@ function consecAll() {
     if (it._pend) { delete it._pend; cambio = true; consecEncolar('consec', it); }   // pendiente de enviar: va a la cola (no se pierde sin señal)
   });
   if (cambio) localStorage.setItem('dimerc_consec', JSON.stringify(all));
+  if (_CBM) _CBM.c = all;
   return all;
 }
-function consecSetAll(all) { localStorage.setItem('dimerc_consec', JSON.stringify(all)); sincPestanasProg(); }
+function consecSetAll(all) { if (_CBM) { _CBM.c = all; _CBM.cd = true; return; } localStorage.setItem('dimerc_consec', JSON.stringify(all)); sincPestanasProg(); }
 // Cualquier cambio en consecutivos o bultos refresca lo que esté a la vista (consecutivos, bultos y verificación): las pestañas quedan iguales
 let _spBusy = false;
 setTimeout(function() { try { consecRescatarHuerfanas(); } catch(e) {} }, 4000);
@@ -5456,6 +5461,18 @@ function _setupFirebase() {
       clearTimeout(_rdT);
       _rdT = setTimeout(() => { try { if (typeof render === 'function') render(); } catch(e) {} }, replay ? 700 : 120);
     }
+    // Cola de eventos de consecutivos/bultos/pedidos: al abrir la app llegan miles seguidos; se procesan en tandas cortas
+    // (cede el hilo entre tandas) para que el login y la pantalla no se queden pegados en equipos lentos (Zebra).
+    let _cbQ = [], _cbOn = false, _cbCambio = false;
+    function cbAplicar(d) { const t = String(d.tipo); return t.indexOf('bulto') === 0 ? window.bultoAplicarCambio(d) : (t.indexOf('pedido') === 0 ? window.pedidoAplicarCambio(d) : window.consecAplicarCambio(d)); }
+    function cbDrain() {
+      const t0 = Date.now(); _CBM = {};
+      try { while (_cbQ.length && Date.now() - t0 < 25) { const d = _cbQ.shift(); try { if (cbAplicar(d)) _cbCambio = true; } catch(e) { console.error('consecutivo/bulto recibido falló', e); } } } finally { cbmFlush(); }
+      if (_cbQ.length) { setTimeout(cbDrain, 50); return; }
+      _cbOn = false; if (_cbCambio) { _cbCambio = false; try { consecRefrescar(); bulRefrescar(); } catch(e) {} }
+    }
+    function cbEncolar(d) { _cbQ.push(d); if (!_cbOn) { _cbOn = true; setTimeout(cbDrain, 30); } }
+    window._cbEncolar = cbEncolar;
     cambRef.on('child_added', snap => {
       try {
       const d = snap.val();
@@ -5470,7 +5487,7 @@ function _setupFirebase() {
       const esReplay = !!changeTs && changeTs < _fbStartTs - 5000;
       if (esReplay && d.tipo === 'stock') return;
       if (/^(consec|bulto|pedido)/.test(String(d.tipo || ''))) {
-        try { const r1 = String(d.tipo).indexOf('bulto') === 0 ? window.bultoAplicarCambio(d) : (String(d.tipo).indexOf('pedido') === 0 ? window.pedidoAplicarCambio(d) : window.consecAplicarCambio(d)); if (r1) { consecRefrescar(); bulRefrescar(); } } catch(e) { console.error('consecutivo/bulto recibido falló', e); }
+        cbEncolar(d);
         return;
       }
       const esEcoLocal = d.saveId && window._recentLocalSaves && window._recentLocalSaves.has(d.saveId);
@@ -8487,8 +8504,8 @@ setInterval(function() {
   } catch(e) {}
 }, 4000);
 function bulDeUsuario(b) { return BUL_USER === '*' || b.user === BUL_USER || b.items.some(function(it) { return it.user === BUL_USER; }); }
-function bulAll() { try { return JSON.parse(localStorage.getItem('dimerc_bultos') || '[]'); } catch(e) { return []; } }
-function bulSet(a) { try { localStorage.setItem('dimerc_bultos', JSON.stringify(a)); } catch(e) {} sincPestanasProg(); }
+function bulAll() { if (_CBM && _CBM.b) return _CBM.b; let r; try { r = JSON.parse(localStorage.getItem('dimerc_bultos') || '[]'); } catch(e) { r = []; } if (_CBM) _CBM.b = r; return r; }
+function bulSet(a) { if (_CBM) { _CBM.b = a; _CBM.bd = true; return; } try { localStorage.setItem('dimerc_bultos', JSON.stringify(a)); } catch(e) {} sincPestanasProg(); }
 // Código único: B + DDMMAA + - + N° del día + 2 caracteres al azar (evita que dos equipos que crean un bulto a la vez repitan el código)
 // Generar con CB: crea una caja (bulto) NUEVA enlazada al consecutivo que se está viendo y abre la pantalla de bultos para capturar sus productos.
 // Al cerrar la caja, sus productos se agregan al final de ese consecutivo (el resto no se toca) y el detalle por caja queda en el registro de consecutivos.
