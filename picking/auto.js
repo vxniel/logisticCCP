@@ -6,7 +6,7 @@
   var K = 'dimerc_pk_cfg';
   function cfgGet() { try { return JSON.parse(localStorage.getItem(K) || '{}'); } catch (e) { return {}; } }
   function cfgSet(c) { try { localStorage.setItem(K, JSON.stringify(c)); } catch (e) {} }
-  var cfg = cfgGet(); if (!cfg.zona) cfg.zona = '*'; if (!cfg.modo) cfg.modo = 'auto'; if (cfg.auto === undefined) cfg.auto = true; if (!cfg.orden) cfg.orden = 'lista'; if (cfg.voz === undefined) cfg.voz = true; if (!cfg.estr) cfg.estr = { PB: '22-29', FV: '1-8', F: '11-14' };
+  var cfg = cfgGet(); if (!cfg.zona) cfg.zona = '*'; if (!cfg.modo) cfg.modo = 'auto'; if (cfg.auto === undefined) cfg.auto = true; if (!cfg.orden) cfg.orden = 'lista'; if (cfg.voz === undefined) cfg.voz = true; if (cfg.tono === undefined) cfg.tono = true; if (!cfg.estr) cfg.estr = { PB: '22-29', FV: '1-8', F: '11-14' };
   var hechos = {}, idx = 0, ultCod = '', ultFill = 0, vioMsg = false, items = [], uInp = null, pInp = null;
 
   function vis(el) { return !!(el && el.offsetWidth && el.offsetHeight); }
@@ -62,6 +62,23 @@
   }
   function activarVoz() { if (vozOk) return; vozOk = true; try { var u = new SpeechSynthesisUtterance(' '); u.volume = 0; window.speechSynthesis.speak(u); } catch (e) {} }
   try { document.addEventListener('click', activarVoz, true); document.addEventListener('touchstart', activarVoz, true); if (window.speechSynthesis) window.speechSynthesis.getVoices(); } catch (e) {}
+  // ---- Pitidos (WebAudio, no necesitan motor de voz) ----
+  var actx = null;
+  function pitar(tipo) {
+    if (!cfg.tono) return;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; if (!actx) actx = new AC(); try { if (actx.resume) actx.resume(); } catch (e) {}
+      var sec = tipo === 'cant' ? [[880, 0, 0.18], [1175, 0.22, 0.18], [1568, 0.44, 0.3]] : [[1000, 0, 0.12], [1000, 0.18, 0.12]], t0 = actx.currentTime, i, o, g;
+      for (i = 0; i < sec.length; i++) { o = actx.createOscillator(); g = actx.createGain(); o.type = 'square'; o.frequency.value = sec[i][0]; g.gain.value = 0.25; o.connect(g); g.connect(actx.destination); o.start(t0 + sec[i][1]); o.stop(t0 + sec[i][1] + sec[i][2]); }
+    } catch (e) {}
+  }
+  function diagVoz() {
+    var t = 'speechSynthesis: ' + (window.speechSynthesis && window.SpeechSynthesisUtterance ? 'SI' : 'NO (este navegador no tiene voz)'), vs = [], i;
+    try { vs = window.speechSynthesis.getVoices() || []; } catch (e) {}
+    t += '\nVoces: ' + vs.length; var v = elegirVoz(); t += '\nVoz en español: ' + (v ? v.lang + ' ' + (v.name || '') : 'NO');
+    t += '\nAudio (pitidos): ' + ((window.AudioContext || window.webkitAudioContext) ? 'SI' : 'NO');
+    t += '\n\nSi hay voz en español, sonará "prueba de voz".'; alert(t); pitar('ubi'); hablar('prueba de voz');
+  }
   function limpiaDes(d) { return String(d || '').replace(/[_*#\/]+/g, ' ').replace(/(\d),(\d)/g, '$1 coma $2').replace(/\s+/g, ' ').trim(); }
   var enCant = false;
   function pantallaCantidad(body) {
@@ -74,7 +91,7 @@
     if (!uInp) return; uInp.focus(); uInp.value = it.ub;
     evt(uInp, 'input'); evt(uInp, 'change'); evt(uInp, 'keydown', 13); evt(uInp, 'keypress', 13); evt(uInp, 'keyup', 13);
     ultCod = it.cod + it.ub; ultFill = new Date().getTime();
-    hablar(limpiaDes(it.des));
+    pitar('ubi'); hablar(limpiaDes(it.des));
     setTimeout(function () { var r = buscarInputs(); if (r.p) { try { r.p.focus(); } catch (e) {} } }, 250);
   }
   // ---- Rotación mensual (la misma de la app de bodega, en Firebase): cada persona prioriza SU zona ----
@@ -150,6 +167,8 @@
     b = bt('👤'); b.title = '¿Quién eres?'; b.onclick = function () { var t = 'Elige quién eres (número):\n', i, v; for (i = 0; i < NOMBRES.length; i++) { t += (i + 1) + ') ' + NOMBRES[i] + '\n'; } t += 'Actual: ' + (cfg.yo || '—') + (miZona() ? ' → zona ' + miZona() : ''); v = prompt(t, ''); if (v === null || v === '') return; i = parseInt(v, 10); if (i >= 1 && i <= NOMBRES.length) { cfg.yo = NOMBRES[i - 1]; cfgSet(cfg); estVisto = false; pintar(); alert('Listo: ' + cfg.yo + (miZona() ? ' · zona ' + miZona() : ' · sin zona este mes')); } }; barra.appendChild(b);
     b = bt('🏭'); b.title = 'Estación de esta zona'; b.onclick = function () { if (cfg.zona === '*') { alert('Elige PB, FV o F primero.'); return; } var v = prompt('Estaciones de ' + cfg.zona + ' (ej: 22-29 o 7,11):', cfg.estr[cfg.zona] || ''); if (v !== null) { cfg.estr[cfg.zona] = String(v).replace(/\s+/g, ''); cfgSet(cfg); estVisto = false; pintar(); } }; barra.appendChild(b);
     b = bt(cfg.voz ? '🔊' : '🔇'); b.title = 'Voz'; b.onclick = function () { cfg.voz = !cfg.voz; cfgSet(cfg); this.textContent = cfg.voz ? '🔊' : '🔇'; activarVoz(); if (cfg.voz) hablar('Voz activada'); }; barra.appendChild(b);
+    b = bt(cfg.tono ? '🔔' : '🔕'); b.title = 'Pitidos'; b.onclick = function () { cfg.tono = !cfg.tono; cfgSet(cfg); this.textContent = cfg.tono ? '🔔' : '🔕'; activarVoz(); pitar('ubi'); }; barra.appendChild(b);
+    b = bt('🗣'); b.title = 'Diagnóstico de voz'; b.onclick = diagVoz; barra.appendChild(b);
     b = bt('?'); b.title = 'Diagnóstico'; b.onclick = function () { var r = buscarInputs(); alert('Campo ubicación: ' + (r.u ? 'OK' : 'NO') + '\nCampo producto: ' + (r.p ? 'OK' : 'NO') + '\nFilas leídas: ' + items.length + '\nZona: ' + cfg.zona + ' (' + filtrar(items).length + ')\nPendientes: ' + pendientes().length + (items[0] ? '\nEj.: ' + items[0].cod + ' ' + items[0].ub : '')); }; barra.appendChild(b);
     b = bt('✕'); b.onclick = function () { barra.style.display = 'none'; }; barra.appendChild(b);
     info = document.createElement('div'); info.style.cssText = 'flex:1 1 100%;margin-top:3px;line-height:1.25'; barra.appendChild(info);
@@ -171,7 +190,7 @@
     if (msg && !vioMsg) { vioMsg = true; var p0 = pendientes()[0]; if (p0 && ultCod === p0.cod + p0.ub) { hechos[p0.cod + p0.ub] = 1; ultCod = ''; } }
     if (!msg) vioMsg = false;
     var dlg = /OK!|PIQUEADO|swal2?-/i.test(body) && (document.querySelector('.swal2-container,.sweet-alert,.swal-overlay,.modal.in,.modal.show') !== null);
-    var cq = pantallaCantidad(body); if (cq && !enCant) { enCant = true; hablar('Cantidad ' + String(cq).replace(',', ' coma ')); } if (!cq) enCant = false;
+    var cq = pantallaCantidad(body); if (cq && !enCant) { enCant = true; pitar('cant'); hablar('Cantidad ' + String(cq).replace(',', ' coma ')); } if (!cq) enCant = false;
     var sig = pendientes()[0];
     if (cfg.auto && !sel && uInp && sig && !dlg && !uInp.value && (ultCod !== sig.cod + sig.ub || new Date().getTime() - ultFill > 6000)) llenar(sig);
     pintar();
