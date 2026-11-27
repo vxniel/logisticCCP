@@ -98,6 +98,8 @@
   function sinMemoria() {
     var ins = document.getElementsByTagName('input'), i, f = document.getElementsByTagName('form');
     for (i = 0; i < f.length; i++) { if (f[i].getAttribute('autocomplete') !== 'off') f[i].setAttribute('autocomplete', 'off'); }
+    var dl = document.getElementsByTagName('datalist'); for (i = 0; i < dl.length; i++) { if (dl[i].children.length) dl[i].innerHTML = ''; }
+    for (i = 0; i < ins.length; i++) { if (ins[i].getAttribute('list')) ins[i].removeAttribute('list'); }
     for (i = 0; i < ins.length; i++) { if (ins[i].type !== 'password' && ins[i].getAttribute('autocomplete') !== 'off') { ins[i].setAttribute('autocomplete', 'off'); ins[i].setAttribute('autocorrect', 'off'); ins[i].setAttribute('autocapitalize', 'off'); ins[i].setAttribute('spellcheck', 'false'); } }
   }
   function tick() {

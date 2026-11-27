@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Picking asistido Dimerc CCP
 // @namespace    dimerc-ccp
-// @version      1.4
-// @description  Abre la estacion de la zona (segun Excel: PB 22-29, FV 1-8, F 11-14) y pone sola la ubicacion
+// @version      1.5
+// @description  Abre la estacion de la zona (PB 22-29, FV 1-8, F 11-14), pone sola la ubicacion y quita las sugerencias de bultos recordados
 // @match        http://10.10.180.248/*
 // @run-at       document-end
 // @grant        none
@@ -107,6 +107,8 @@
   function sinMemoria() {
     var ins = document.getElementsByTagName('input'), i, f = document.getElementsByTagName('form');
     for (i = 0; i < f.length; i++) { if (f[i].getAttribute('autocomplete') !== 'off') f[i].setAttribute('autocomplete', 'off'); }
+    var dl = document.getElementsByTagName('datalist'); for (i = 0; i < dl.length; i++) { if (dl[i].children.length) dl[i].innerHTML = ''; }
+    for (i = 0; i < ins.length; i++) { if (ins[i].getAttribute('list')) ins[i].removeAttribute('list'); }
     for (i = 0; i < ins.length; i++) { if (ins[i].type !== 'password' && ins[i].getAttribute('autocomplete') !== 'off') { ins[i].setAttribute('autocomplete', 'off'); ins[i].setAttribute('autocorrect', 'off'); ins[i].setAttribute('autocapitalize', 'off'); ins[i].setAttribute('spellcheck', 'false'); } }
   }
   function tick() {
