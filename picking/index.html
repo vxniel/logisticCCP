@@ -7,10 +7,12 @@
 <textarea id="t" readonly onclick="this.select()">Cargando…</textarea><button onclick="c()">📋 Copiar atajo</button><div id="m"></div>
 <h2 style="font-size:15px;margin:14px 0 4px">Opción B · Script automático en Via</h2>
 <small>Se ejecuta solo al abrir la preparación (sin tocar nada). En Via: Menú › Herramientas/Complementos › <b>Scripts</b> › agregar, y pega el contenido de este archivo.</small>
-<button onclick="location.href='pick.user.js'" style="background:#1f6feb">⬇️ Abrir script (.user.js)</button>
+<textarea id="u" readonly onclick="this.select()">Cargando…</textarea><button onclick="cu()" style="background:#1f6feb">📋 Copiar script completo</button><div id="m2"></div>
 <h2 style="font-size:15px;margin:14px 0 4px">Barra</h2><small><b>PB / FV / F / Todas</b> elige la zona · <b>AUTO</b> activa/desactiva · <b>⏭</b> salta · <b>↺</b> reinicia · <b>↕</b> orden lista/ubicación · <b>?</b> diagnóstico</small>
 <script>var S='';
 function listo(code){code=code.replace(/\s*\n\s*/g,' ');S='javascript:'+encodeURIComponent('(function(){'+code+'})();').replace(/%20/g,' ');document.getElementById('t').value=S}
 var x=new XMLHttpRequest();x.open('GET','auto.js?'+Date.now());x.onload=function(){listo(x.responseText)};x.onerror=function(){document.getElementById('t').value='No se pudo cargar el script. Reintenta.'};x.send();
+var y=new XMLHttpRequest();y.open('GET','pick.user.js?'+Date.now());y.onload=function(){document.getElementById('u').value=y.responseText};y.send();
+function cu(){var t=document.getElementById('u');t.select();t.setSelectionRange(0,999999);var ok=false;try{ok=document.execCommand('copy')}catch(e){}document.getElementById('m2').textContent=ok?'✅ Script copiado':'Mantén presionado el cuadro y elige Copiar'}
 function c(){var t=document.getElementById('t');t.select();t.setSelectionRange(0,999999);var ok=false;try{ok=document.execCommand('copy')}catch(e){}if(!ok&&navigator.clipboard)try{navigator.clipboard.writeText(S);ok=true}catch(e){}document.getElementById('m').textContent=ok?'✅ Copiado ('+S.length+' caracteres)':'Mantén presionado el cuadro y elige Copiar'}</script>
 </body></html>
