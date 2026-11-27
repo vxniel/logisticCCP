@@ -661,7 +661,7 @@ body.locked #section-produccion{display:none!important}
 <div class="watermark">by <span>Vxniel</span></div>
 
 <div id="fb-toast"></div>
-<div id="tools-menu" role="menu"><button type="button" onclick="abrirHerramienta('calc')">🧮 Calculadora</button><button type="button" onclick="abrirHerramienta('voz')">🎙️ Asistente virtual</button><button type="button" onclick="abrirHerramienta('imp')">🖨️ Impresoras</button><button type="button" onclick="abrirHerramienta('full')">⛶ Pantalla completa</button></div>
+<div id="tools-menu" role="menu"><button type="button" onclick="abrirHerramienta('calc')">🧮 Calculadora</button><button type="button" onclick="abrirHerramienta('voz')">🎙️ Asistente virtual</button><button type="button" onclick="abrirHerramienta('imp')">🖨️ Impresoras</button><button type="button" onclick="window.open('picking/','_blank');document.getElementById('tools-menu').classList.remove('open')">⚡ Picking asistido</button><button type="button" onclick="abrirHerramienta('full')">⛶ Pantalla completa</button></div>
 <div id="cat-modal" onclick="if(event.target===this)cerrarFotoCatalogo()"><div id="cat-box"></div></div>
 
 <div id="calc-modal" onclick="if(event.target===this)toggleCalculadora()">
