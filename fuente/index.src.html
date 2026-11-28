@@ -1321,7 +1321,7 @@ body.locked #section-produccion{display:none!important}
       <!-- Ubicación -->
       <div id="step2-ubic-panel">
         <div class="mod-step-label">Paso 2 — Ubicaciones actuales</div>
-        <div class="mod-step-desc">Elige cuál ubicación quieres renombrar. Las demás se mantienen igual.</div>
+        <div class="mod-step-desc">Renombra una ubicación o agrega una nueva (para sumar volumen). Las demás se mantienen igual.</div>
         <div id="mod-ubic-list" style="margin-top:10px;display:flex;flex-direction:column;gap:8px"></div>
         <div id="mod-ubic-edit" style="display:none;margin-top:12px">
           <div class="mod-step-desc" id="mod-ubic-edit-label" style="margin-bottom:6px"></div>
@@ -2094,7 +2094,7 @@ function renderUbicChips() {
   document.getElementById('mod-ubic-edit').style.display='none';
   const list = document.getElementById('mod-ubic-list');
   if(!modUbicParts.length) {
-    list.innerHTML = '<div style="font-size:12px;color:#484f58;text-align:center;padding:10px">Este producto no tiene ubicaciones registradas.</div>';
+    list.innerHTML = '<div style="font-size:12px;color:#484f58;text-align:center;padding:10px">Este producto no tiene ubicaciones registradas.</div><button class="mod-back-btn" style="width:100%" onclick="modAddUbic()">➕ Agregar ubicación</button>';
     return;
   }
   list.innerHTML = modUbicParts.map((u,i) => {
@@ -2104,6 +2104,7 @@ function renderUbicChips() {
       <span class="ubic-chip-zone ${cls}">${zona}</span>
       <span class="ubic-chip-code">${u}</span>
       <span class="ubic-chip-edit">✏️ Renombrar</span>
+      <span class="ubic-chip-edit" style="color:#3fb950;border-left:1px solid #30363d;padding-left:10px" onclick="event.stopPropagation();modAddUbic()">➕ Nueva</span>
     </div>`;
   }).join('');
 
@@ -2118,10 +2119,22 @@ function modEditUbicPart(i) {
   document.getElementById('mod-ubic-edit-label').textContent = `Editando: ${zonePrefixOf(current)} · ${current}`;
   document.getElementById('mod-ubic-edit').style.display='block';
   const input = document.getElementById('mod-ubic');
-  input.value = current;
+  input.value = current; input.placeholder = 'F-00-00-00-00-X-00';
   document.getElementById('mod-ubic-preview').style.display='none';
   input.focus();
   input.dispatchEvent(new Event('input'));
+}
+
+// Agregar una ubicación NUEVA al producto (volumen / segunda ubicación); no reemplaza ninguna.
+function modAddUbic() {
+  modUbicEditIdx = -2;
+  document.getElementById('mod-ubic-edit-label').textContent = '➕ Nueva ubicación para este producto (se suma a las actuales)';
+  document.getElementById('mod-ubic-edit').style.display='block';
+  const input = document.getElementById('mod-ubic');
+  input.value = '';
+  document.getElementById('mod-ubic-preview').style.display='none';
+  input.placeholder = 'Ej: VZ-01-01-01-01-A-01 / VA-...';
+  input.focus();
 }
 
 function modCancelUbicEdit() {
@@ -2152,13 +2165,13 @@ document.getElementById('mod-ubic').addEventListener('input', e => {
     prev.style.display='block';
   }
 });
-document.getElementById('mod-ubic').addEventListener('keydown', e => { if(e.key==='Enter' && modUbicEditIdx>=0) modConfirmStep(); });
+document.getElementById('mod-ubic').addEventListener('keydown', e => { if(e.key==='Enter' && modUbicEditIdx!==-1) modConfirmStep(); });
 
 function modConfirmStep() {
   if(!modCurrentProduct) return;
   let sum_html = '';
   if(modTypeAtStep2==='ubic') {
-    if(modUbicEditIdx<0) {
+    if(modUbicEditIdx===-1) {
       const err = document.getElementById('mod-err');
       if(err) { err.textContent = '⚠️ Selecciona primero cuál ubicación quieres reemplazar.'; err.style.cssText='color:#f85149;font-size:13px;font-weight:700;text-align:center;margin-top:8px;padding:8px;background:#2a0f0f;border:1px solid #f85149;border-radius:6px'; }
       return;
@@ -2170,7 +2183,20 @@ function modConfirmStep() {
       document.getElementById('mod-ubic').focus();
       return;
     }
-    const oldPart = modUbicParts[modUbicEditIdx];
+    const oldPart = modUbicEditIdx === -2 ? '' : modUbicParts[modUbicEditIdx];
+    if(modUbicEditIdx === -2) {
+      if(modUbicParts.some(u=>u.toUpperCase()===newUbic)) {
+        const err = document.getElementById('mod-err');
+        if(err) { err.textContent = '⚠️ Esa ubicación ya está registrada en este producto.'; err.style.cssText='color:#f85149;font-size:13px;font-weight:700;text-align:center;margin-top:8px;padding:8px;background:#2a0f0f;border:1px solid #f85149;border-radius:6px'; }
+        return;
+      }
+      sum_html = `<div class="mod-summary-row"><span class="mod-summary-key">Tipo</span><span class="mod-summary-val">➕ Nueva ubicación (${zonePrefixOf(newUbic)})</span></div>
+    <div class="mod-summary-row"><span class="mod-summary-key">Producto</span><span class="mod-summary-val" style="color:#e6edf3;font-family:inherit;font-size:11px;max-width:55%;text-align:right">${modCurrentProduct.desc}</span></div>
+    <div class="mod-summary-row"><span class="mod-summary-key">Código</span><span class="mod-summary-val">${modCurrentProduct.cod}</span></div>
+    <div class="mod-summary-row"><span class="mod-summary-key">Ubicaciones actuales</span><span class="mod-summary-val">${modUbicParts.join(', ')||'—'}</span></div>
+    <div class="mod-summary-row"><span class="mod-summary-key">Se agrega</span><span class="mod-summary-arrow">+ ${newUbic}</span></div>
+    <div style="font-size:10px;color:#484f58;margin-top:6px;text-align:center">Las ubicaciones actuales no se modifican.</div>`;
+    } else
     sum_html = `<div class="mod-summary-row"><span class="mod-summary-key">Tipo</span><span class="mod-summary-val">📍 Cambio de ubicación (${zonePrefixOf(oldPart)})</span></div>
     <div class="mod-summary-row"><span class="mod-summary-key">Producto</span><span class="mod-summary-val" style="color:#e6edf3;font-family:inherit;font-size:11px;max-width:55%;text-align:right">${modCurrentProduct.desc}</span></div>
     <div class="mod-summary-row"><span class="mod-summary-key">Código</span><span class="mod-summary-val">${modCurrentProduct.cod}</span></div>
@@ -2430,23 +2456,26 @@ function modSave() {
 
   if(modTypeAtStep2 === 'ubic') {
     // ── GUARDAR UBICACIÓN (solo la zona editada) ──
-    if(modUbicEditIdx<0) { err.textContent='⚠️ Elige una ubicación para renombrar'; return; }
+    if(modUbicEditIdx===-1) { err.textContent='⚠️ Elige una ubicación para renombrar o agrega una nueva'; return; }
     const newUbicPart = document.getElementById('mod-ubic').value.trim().toUpperCase();
-    const oldUbicPart = modUbicParts[modUbicEditIdx];
+    const esAgregar = modUbicEditIdx === -2;
+    if(!newUbicPart) { err.textContent='⚠️ Escribe la ubicación'; return; }
+    if(esAgregar && modUbicParts.some(u=>u.toUpperCase()===newUbicPart)) { err.textContent='⚠️ Esa ubicación ya está registrada en este producto'; return; }
+    const oldUbicPart = esAgregar ? '' : modUbicParts[modUbicEditIdx];
     const oldUbicFull = modCurrentProduct.ubic;
     const updatedParts = modUbicParts.slice();
-    updatedParts[modUbicEditIdx] = newUbicPart;
+    if(esAgregar) updatedParts.push(newUbicPart); else updatedParts[modUbicEditIdx] = newUbicPart;
     const newUbicFull = updatedParts.join(',');
     const idx = DATA.findIndex(d=>d.cod===modCurrentProduct.cod && d.ubic===modCurrentProduct.ubic);
     if(idx>=0) DATA[idx].ubic = newUbicFull;
     modCurrentProduct.ubic = newUbicFull;
     modUbicParts = updatedParts;
-    safePush(modCurrentProduct.cod, modCurrentProduct.desc, oldUbicPart, newUbicPart, matchUser, 'ubic');
+    safePush(modCurrentProduct.cod, modCurrentProduct.desc, esAgregar ? '—' : oldUbicPart, newUbicPart, matchUser, 'ubic');
     const hist = JSON.parse(localStorage.getItem('dimerc_hist')||'[]');
-    hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo:'📍 Ubicación ('+zonePrefixOf(oldUbicPart)+')', cod: modCurrentProduct.cod, desc: modCurrentProduct.desc, de: oldUbicPart, a: newUbicPart, user: matchUser });
+    hist.unshift({ ts: getOfficialNow().toLocaleString('es-CL'), tipo: esAgregar ? ('➕ Nueva ubicación ('+zonePrefixOf(newUbicPart)+')') : ('📍 Ubicación ('+zonePrefixOf(oldUbicPart)+')'), cod: modCurrentProduct.cod, desc: modCurrentProduct.desc, de: esAgregar ? '—' : oldUbicPart, a: newUbicPart, user: matchUser });
     if(hist.length>5000) hist.pop();
     localStorage.setItem('dimerc_hist', JSON.stringify(hist));
-    document.getElementById('mod-success-msg').textContent = modCurrentProduct.desc + ': ' + zonePrefixOf(oldUbicPart) + ' ' + oldUbicPart + ' → ' + newUbicPart + ' (por ' + matchUser + ')';
+    document.getElementById('mod-success-msg').textContent = esAgregar ? (modCurrentProduct.desc + ': nueva ubicación ' + newUbicPart + ' agregada (por ' + matchUser + ')') : (modCurrentProduct.desc + ': ' + zonePrefixOf(oldUbicPart) + ' ' + oldUbicPart + ' → ' + newUbicPart + ' (por ' + matchUser + ')');
   } else {
     // ── GUARDAR STOCK POR UBICACIÓN (cada Vz por separado) ──
     const newZones = {};
