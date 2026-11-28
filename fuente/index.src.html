@@ -2730,14 +2730,8 @@ function histRangeChanged() {
 }
 
 function getHistoryRows() {
-  // Un solo registro por código en lo exportado: se queda el más reciente y se descarta el anterior
-  const _todas = histFilteredEntries(), _ult = {};
-  _todas.forEach((h, i) => {
-    const c = String(h.cod || ''), d = histParseTs(h), t = d ? d.getTime() : 0, prev = _ult[c];
-    if (!c) return;
-    if (!prev || t > prev.t || (t === prev.t && i < prev.i)) _ult[c] = { t, i };
-  });
-  const hist = _todas.filter((h, i) => { const c = String(h.cod || ''); return !c || (_ult[c] && _ult[c].i === i); }), stock = histKind() === 'stock';
+  // Se exportan TODOS los movimientos del rango (incluye varios cambios del mismo código)
+  const hist = histFilteredEntries(), stock = histKind() === 'stock';
   return hist.map(h => stock ? {
     Fecha: h.ts || '',
     Tipo: histTipoExport(h),
